@@ -14,6 +14,7 @@ export type BoardCard = {
   listId: string
   title: string
   description: string | null
+  completed: boolean
   position: number
 }
 
@@ -48,10 +49,20 @@ export type CreateListInput = {
   name: string
 }
 
+export type UpdateListInput = {
+  name: string
+}
+
 export type CreateCardInput = {
   listId: string
   title: string
   description?: string
+}
+
+export type UpdateCardInput = {
+  title?: string
+  description?: string | null
+  completed?: boolean
 }
 
 export type MoveCardInput = {

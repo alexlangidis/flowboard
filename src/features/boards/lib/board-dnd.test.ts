@@ -24,6 +24,7 @@ const board: BoardDetail = {
           listId: 'list-1',
           title: 'First',
           description: null,
+          completed: false,
           position: 0,
         },
         {
@@ -31,6 +32,7 @@ const board: BoardDetail = {
           listId: 'list-1',
           title: 'Second',
           description: null,
+          completed: false,
           position: 1,
         },
       ],

@@ -1,4 +1,5 @@
 import {
+  boolean,
   integer,
   pgTable,
   primaryKey,
@@ -90,6 +91,7 @@ export const cards = pgTable('cards', {
     .references(() => lists.id),
   title: text('title').notNull(),
   description: text('description'),
+  completed: boolean('completed').notNull().default(false),
   position: integer('position').notNull().default(0),
   ...timestamps,
 })

@@ -3,7 +3,14 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 
 import { createDb } from '../db/client'
-import { boards, cards, lists, workspaceMembers } from '../db/schema'
+import {
+  attachments,
+  boards,
+  cards,
+  comments,
+  lists,
+  workspaceMembers,
+} from '../db/schema'
 import { getCurrentUser } from '../lib/auth'
 import type { AppEnv } from '../lib/env'
 import { parseJsonBody } from '../lib/validation'
@@ -18,6 +25,12 @@ const moveCardSchema = z.object({
   cardId: z.string().uuid(),
   toListId: z.string().uuid(),
   toIndex: z.number().int().min(0),
+})
+
+const updateCardSchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  description: z.string().max(500).nullable().optional(),
+  completed: z.boolean().optional(),
 })
 
 async function getAccessibleList(
@@ -43,6 +56,37 @@ async function getAccessibleList(
     .limit(1)
 
   return list
+}
+
+async function getAccessibleCard(
+  db: ReturnType<typeof createDb>,
+  cardId: string,
+  userId: string,
+) {
+  const [card] = await db
+    .select({
+      id: cards.id,
+      listId: cards.listId,
+      boardId: lists.boardId,
+      title: cards.title,
+      description: cards.description,
+      completed: cards.completed,
+      position: cards.position,
+    })
+    .from(cards)
+    .innerJoin(lists, eq(lists.id, cards.listId))
+    .innerJoin(boards, eq(boards.id, lists.boardId))
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.workspaceId, boards.workspaceId),
+        eq(workspaceMembers.userId, userId),
+      ),
+    )
+    .where(eq(cards.id, cardId))
+    .limit(1)
+
+  return card
 }
 
 export const cardRoutes = new Hono<AppEnv>()
@@ -96,6 +140,7 @@ export const cardRoutes = new Hono<AppEnv>()
         listId: input.listId,
         title: input.title,
         description: input.description,
+        completed: false,
         position: (lastCard?.position ?? -1) + 1,
       })
       .returning({
@@ -103,6 +148,7 @@ export const cardRoutes = new Hono<AppEnv>()
         listId: cards.listId,
         title: cards.title,
         description: cards.description,
+        completed: cards.completed,
         position: cards.position,
       })
 
@@ -136,6 +182,7 @@ export const cardRoutes = new Hono<AppEnv>()
         listId: cards.listId,
         title: cards.title,
         description: cards.description,
+        completed: cards.completed,
         position: cards.position,
       })
       .from(cards)
@@ -212,6 +259,7 @@ export const cardRoutes = new Hono<AppEnv>()
         listId: cards.listId,
         title: cards.title,
         description: cards.description,
+        completed: cards.completed,
         position: cards.position,
       })
       .from(cards)
@@ -222,6 +270,87 @@ export const cardRoutes = new Hono<AppEnv>()
       success: true,
       data: {
         card: updatedCard,
+      },
+    })
+  })
+  .patch('/:cardId', async (c) => {
+    const user = await getCurrentUser(c)
+
+    if (!user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const db = createDb(c.env)
+    const cardId = c.req.param('cardId')
+    const existingCard = await getAccessibleCard(db, cardId, user.id)
+
+    if (!existingCard) {
+      return c.json({ success: false, error: 'Card not found' }, 404)
+    }
+
+    const input = await parseJsonBody(c.req.raw, updateCardSchema)
+    const [card] = await db
+      .update(cards)
+      .set({
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description }
+          : {}),
+        ...(input.completed !== undefined
+          ? { completed: input.completed }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(cards.id, cardId))
+      .returning({
+        id: cards.id,
+        listId: cards.listId,
+        title: cards.title,
+        description: cards.description,
+        completed: cards.completed,
+        position: cards.position,
+      })
+
+    await db
+      .update(boards)
+      .set({ updatedAt: new Date() })
+      .where(eq(boards.id, existingCard.boardId))
+
+    return c.json({
+      success: true,
+      data: {
+        card,
+      },
+    })
+  })
+  .delete('/:cardId', async (c) => {
+    const user = await getCurrentUser(c)
+
+    if (!user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const db = createDb(c.env)
+    const cardId = c.req.param('cardId')
+    const card = await getAccessibleCard(db, cardId, user.id)
+
+    if (!card) {
+      return c.json({ success: false, error: 'Card not found' }, 404)
+    }
+
+    await db.delete(attachments).where(eq(attachments.cardId, cardId))
+    await db.delete(comments).where(eq(comments.cardId, cardId))
+    await db.delete(cards).where(eq(cards.id, cardId))
+
+    await db
+      .update(boards)
+      .set({ updatedAt: new Date() })
+      .where(eq(boards.id, card.boardId))
+
+    return c.json({
+      success: true,
+      data: {
+        deletedCardId: cardId,
       },
     })
   })

@@ -11,6 +11,8 @@ import type {
   MoveCardInput,
   ToggleBoardStarInput,
   UpdateBoardInput,
+  UpdateCardInput,
+  UpdateListInput,
 } from '../types'
 
 type BoardsResponse = {
@@ -38,6 +40,20 @@ type DeleteBoardResponse = {
   success: true
   data: {
     deletedBoardId: string
+  }
+}
+
+type DeleteCardResponse = {
+  success: true
+  data: {
+    deletedCardId: string
+  }
+}
+
+type DeleteListResponse = {
+  success: true
+  data: {
+    deletedListId: string
   }
 }
 
@@ -105,8 +121,40 @@ export function createList(input: CreateListInput) {
   })
 }
 
+export function updateList(listId: string, input: UpdateListInput) {
+  return apiClient.patch<ListResponse, UpdateListInput>(
+    `/api/lists/${listId}`,
+    input,
+    {
+      credentials: 'include',
+    },
+  )
+}
+
+export function deleteList(listId: string) {
+  return apiClient.delete<DeleteListResponse>(`/api/lists/${listId}`, {
+    credentials: 'include',
+  })
+}
+
 export function createCard(input: CreateCardInput) {
   return apiClient.post<CardResponse, CreateCardInput>('/api/cards', input, {
+    credentials: 'include',
+  })
+}
+
+export function updateCard(cardId: string, input: UpdateCardInput) {
+  return apiClient.patch<CardResponse, UpdateCardInput>(
+    `/api/cards/${cardId}`,
+    input,
+    {
+      credentials: 'include',
+    },
+  )
+}
+
+export function deleteCard(cardId: string) {
+  return apiClient.delete<DeleteCardResponse>(`/api/cards/${cardId}`, {
     credentials: 'include',
   })
 }

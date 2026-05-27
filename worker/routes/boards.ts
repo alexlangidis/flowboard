@@ -401,6 +401,7 @@ export const boardRoutes = new Hono<AppEnv>()
               listId: cards.listId,
               title: cards.title,
               description: cards.description,
+              completed: cards.completed,
               position: cards.position,
             })
             .from(cards)
