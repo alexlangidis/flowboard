@@ -1,0 +1,6 @@
+dist
+.wrangler
+.codex-artifacts
+node_modules
+coverage
+src/routeTree.gen.ts

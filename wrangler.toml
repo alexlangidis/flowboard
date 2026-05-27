@@ -1,0 +1,8 @@
+name = "flowboard-api"
+main = "worker/index.ts"
+compatibility_date = "2026-05-27"
+compatibility_flags = ["nodejs_compat"]
+
+[[r2_buckets]]
+binding = "ATTACHMENTS_BUCKET"
+bucket_name = "flowboard-attachments"
