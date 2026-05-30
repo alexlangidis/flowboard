@@ -87,10 +87,11 @@ export function useBoardsQuery() {
   })
 }
 
-export function useBoardQuery(boardId: string) {
+export function useBoardQuery(boardId: string, enabled = true) {
   return useQuery({
     queryKey: boardQueryKey(boardId),
     queryFn: () => boardsApi.getBoard(boardId),
+    enabled,
   })
 }
 

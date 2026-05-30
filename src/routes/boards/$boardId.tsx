@@ -24,7 +24,6 @@ import {
   Edit3,
   Eye,
   EyeOff,
-  Filter,
   FolderPlus,
   GripVertical,
   Layers,
@@ -210,7 +209,6 @@ function BoardPage() {
   const moveCardMutation = useMoveCardMutation(boardId)
   const [activeCard, setActiveCard] = useState<BoardCard | null>(null)
   const [query, setQuery] = useState('')
-  const [themeIndex, setThemeIndex] = useState(0)
   const [compactCards, setCompactCards] = useState(false)
   const [hideCompletedCards, setHideCompletedCards] = useState(false)
   const [collapsedListIds, setCollapsedListIds] = useState<Set<string>>(
@@ -253,7 +251,7 @@ function BoardPage() {
     (total, list) => total + list.cards.length,
     0,
   )
-  const boardTheme = boardThemes[themeIndex]
+  const boardTheme = boardThemes[0]
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -365,15 +363,6 @@ function BoardPage() {
     setCollapsedListIds(new Set())
   }
 
-  async function handleCopyBoardLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      toast.success('Board link copied.')
-    } catch {
-      toast.error('Unable to copy board link.')
-    }
-  }
-
   return (
     <div
       className={`flex h-full flex-col overflow-hidden ${boardTheme.canvas}`}
@@ -442,36 +431,9 @@ function BoardPage() {
                 onChange={(event) => setQuery(event.target.value)}
               />
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Filter data-icon="inline-start" />
-                  Theme
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Board color</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  {boardThemes.map((theme, index) => (
-                    <DropdownMenuItem
-                      key={theme.name}
-                      onSelect={() => setThemeIndex(index)}
-                    >
-                      <span
-                        className={`size-3 rounded-full ${theme.swatch}`}
-                        aria-hidden="true"
-                      />
-                      {theme.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
             {board && (
               <BoardSettingsMenu
                 board={board}
-                boardTheme={boardTheme}
                 compactCards={compactCards}
                 hideCompletedCards={hideCompletedCards}
                 isAllCollapsed={
@@ -480,24 +442,17 @@ function BoardPage() {
                       localBoard.lists.length > 0
                     : false
                 }
-                themeIndex={themeIndex}
                 totalCards={totalCards}
                 visibleCards={visibleCards}
                 onCollapseAll={handleCollapseAllLists}
-                onCopyBoardLink={() => void handleCopyBoardLink()}
                 onExpandAll={handleExpandAllLists}
                 onSetCompactCards={setCompactCards}
                 onSetHideCompletedCards={setHideCompletedCards}
-                onSetThemeIndex={setThemeIndex}
                 onRefresh={() => void boardQuery.refetch()}
                 onToggleStar={() => void handleToggleStar(board)}
                 toggleStarPending={toggleStarMutation.isPending}
               />
             )}
-            <Button variant="outline" size="sm">
-              <Users data-icon="inline-start" />
-              Share
-            </Button>
             {board && (
               <>
                 <EditBoardDialog board={board}>
@@ -621,39 +576,31 @@ function BoardPage() {
 
 function BoardSettingsMenu({
   board,
-  boardTheme,
   compactCards,
   hideCompletedCards,
   isAllCollapsed,
-  themeIndex,
   totalCards,
   visibleCards,
   toggleStarPending,
   onCollapseAll,
-  onCopyBoardLink,
   onExpandAll,
   onRefresh,
   onSetCompactCards,
   onSetHideCompletedCards,
-  onSetThemeIndex,
   onToggleStar,
 }: {
   board: BoardDetail
-  boardTheme: BoardTheme
   compactCards: boolean
   hideCompletedCards: boolean
   isAllCollapsed: boolean
-  themeIndex: number
   totalCards: number
   visibleCards: number
   toggleStarPending: boolean
   onCollapseAll: () => void
-  onCopyBoardLink: () => void
   onExpandAll: () => void
   onRefresh: () => void
   onSetCompactCards: (compact: boolean) => void
   onSetHideCompletedCards: (hideCompleted: boolean) => void
-  onSetThemeIndex: (themeIndex: number) => void
   onToggleStar: () => void
 }) {
   const completedCards = board.lists.reduce(
@@ -696,10 +643,6 @@ function BoardSettingsMenu({
               Edit board details
             </DropdownMenuItem>
           </EditBoardDialog>
-          <DropdownMenuItem onSelect={onCopyBoardLink}>
-            <Copy aria-hidden="true" />
-            Copy board link
-          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onRefresh}>
             <RefreshCw aria-hidden="true" />
             Refresh board
@@ -732,32 +675,7 @@ function BoardSettingsMenu({
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="flex items-center gap-2">
-          <Palette aria-hidden="true" className="size-4" />
-          Board color
-        </DropdownMenuLabel>
-        <DropdownMenuGroup>
-          {boardThemes.map((theme, index) => (
-            <DropdownMenuItem
-              key={theme.name}
-              onSelect={() => onSetThemeIndex(index)}
-            >
-              <span
-                className={`size-3 rounded-full ${theme.swatch}`}
-                aria-hidden="true"
-              />
-              {theme.name}
-              {themeIndex === index && (
-                <Badge className="ml-auto" variant="secondary">
-                  Active
-                </Badge>
-              )}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <div className="grid grid-cols-3 gap-2 p-1">
-          <BoardMenuStat label="Theme" value={boardTheme.name} />
+        <div className="grid grid-cols-2 gap-2 p-1">
           <BoardMenuStat label="Cards" value={visibleCards} />
           <BoardMenuStat label="Done" value={completedCards} />
         </div>
