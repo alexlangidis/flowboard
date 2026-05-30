@@ -29,6 +29,12 @@ type AuthResult = {
   } | null
 }
 
+type EmailOtpAuthClient = {
+  emailOtp: {
+    verifyEmail: (input: { email: string; otp: string }) => Promise<AuthResult>
+  }
+}
+
 function getErrorMessage(result: AuthResult, fallback: string) {
   return result.error?.message ?? fallback
 }
@@ -190,6 +196,73 @@ function ResendVerificationButton({
   )
 }
 
+function VerifyEmailCodeForm({
+  email,
+  onError,
+  onSuccess,
+  onVerified,
+}: {
+  email: string
+  onError: (message: string) => void
+  onSuccess: (message: string) => void
+  onVerified: () => Promise<void> | void
+}) {
+  const [code, setCode] = useState('')
+  const [isVerifying, setIsVerifying] = useState(false)
+
+  async function handleVerify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!email) {
+      onError('Enter your email first.')
+      return
+    }
+
+    setIsVerifying(true)
+
+    try {
+      const result = await (
+        authClient as unknown as EmailOtpAuthClient
+      ).emailOtp.verifyEmail({
+        email,
+        otp: code,
+      })
+
+      if (result.error) {
+        onError(getErrorMessage(result, 'Unable to verify email.'))
+        return
+      }
+
+      onSuccess('Email verified.')
+      await onVerified()
+    } catch (error) {
+      onError(getCaughtErrorMessage(error, 'Unable to verify email.'))
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  return (
+    <form className="grid gap-3" onSubmit={handleVerify}>
+      <div className="grid gap-2">
+        <Label htmlFor="verification-code">Verification code</Label>
+        <Input
+          id="verification-code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          required
+        />
+      </div>
+      <Button className="w-full" type="submit" disabled={isVerifying}>
+        {isVerifying ? 'Verifying' : 'Verify email'}
+        <ArrowRight />
+      </Button>
+    </form>
+  )
+}
+
 export function SignInForm() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -197,6 +270,7 @@ export function SignInForm() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const canVerifyEmail = shouldOfferVerification(error)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -287,6 +361,14 @@ export function SignInForm() {
             onSuccess={setSuccess}
           />
         ) : null}
+        {canVerifyEmail ? (
+          <VerifyEmailCodeForm
+            email={email}
+            onError={setError}
+            onSuccess={setSuccess}
+            onVerified={() => navigate({ to: '/dashboard' })}
+          />
+        ) : null}
       </form>
     </AuthShell>
   )
@@ -300,6 +382,7 @@ export function SignUpForm() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const canVerifyEmail = Boolean(success)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -398,6 +481,14 @@ export function SignUpForm() {
             email={email}
             onError={setError}
             onSuccess={setSuccess}
+          />
+        ) : null}
+        {canVerifyEmail ? (
+          <VerifyEmailCodeForm
+            email={email}
+            onError={setError}
+            onSuccess={setSuccess}
+            onVerified={() => navigate({ to: '/dashboard' })}
           />
         ) : null}
       </form>
