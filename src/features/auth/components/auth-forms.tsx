@@ -1,6 +1,14 @@
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ArrowRight, KeyRound, Lock, Mail, User } from 'lucide-react'
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  Mail,
+  User,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -73,6 +81,54 @@ function StatusMessage({
     >
       {children}
     </p>
+  )
+}
+
+function PasswordInput({
+  id,
+  autoComplete,
+  value,
+  onChange,
+  disabled,
+  leadingIcon = 'lock',
+}: {
+  id: string
+  autoComplete: string
+  value: string
+  onChange: (value: string) => void
+  disabled?: boolean
+  leadingIcon?: 'key' | 'lock'
+}) {
+  const [isVisible, setIsVisible] = useState(false)
+  const Icon = isVisible ? EyeOff : Eye
+  const LeadingIcon = leadingIcon === 'key' ? KeyRound : Lock
+
+  return (
+    <div className="relative">
+      <LeadingIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
+      <Input
+        id={id}
+        className="pr-9 pl-8"
+        type={isVisible ? 'text' : 'password'}
+        autoComplete={autoComplete}
+        minLength={autoComplete === 'new-password' ? 8 : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required
+        disabled={disabled}
+      />
+      <Button
+        className="absolute top-0 right-0 text-muted-foreground hover:text-foreground"
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={isVisible ? 'Hide password' : 'Show password'}
+        onClick={() => setIsVisible((current) => !current)}
+        disabled={disabled}
+      >
+        <Icon />
+      </Button>
+    </div>
   )
 }
 
@@ -150,18 +206,12 @@ export function SignInForm() {
               Forgot?
             </Link>
           </div>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-            <Input
-              id="password"
-              className="pl-8"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </div>
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={setPassword}
+          />
         </div>
         <Button className="w-full" type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Signing in' : 'Sign in'}
@@ -252,19 +302,12 @@ export function SignUpForm() {
         </div>
         <div className="grid gap-2">
           <Label htmlFor="password">Password</Label>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-            <Input
-              id="password"
-              className="pl-8"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </div>
+          <PasswordInput
+            id="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={setPassword}
+          />
         </div>
         <Button className="w-full" type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Creating' : 'Create account'}
@@ -399,20 +442,14 @@ export function ResetPasswordForm() {
         {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
         <div className="grid gap-2">
           <Label htmlFor="password">New password</Label>
-          <div className="relative">
-            <KeyRound className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
-            <Input
-              id="password"
-              className="pl-8"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              disabled={!token}
-            />
-          </div>
+          <PasswordInput
+            id="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={setPassword}
+            disabled={!token}
+            leadingIcon="key"
+          />
         </div>
         <Button
           className="w-full"
