@@ -210,9 +210,7 @@ function VerifyEmailCodeForm({
   const [code, setCode] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
 
-  async function handleVerify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
+  async function handleVerify() {
     if (!email) {
       onError('Enter your email first.')
       return
@@ -243,7 +241,7 @@ function VerifyEmailCodeForm({
   }
 
   return (
-    <form className="grid gap-3" onSubmit={handleVerify}>
+    <div className="grid gap-3">
       <div className="grid gap-2">
         <Label htmlFor="verification-code">Verification code</Label>
         <Input
@@ -255,11 +253,16 @@ function VerifyEmailCodeForm({
           required
         />
       </div>
-      <Button className="w-full" type="submit" disabled={isVerifying}>
+      <Button
+        className="w-full"
+        type="button"
+        disabled={isVerifying}
+        onClick={handleVerify}
+      >
         {isVerifying ? 'Verifying' : 'Verify email'}
         <ArrowRight />
       </Button>
-    </form>
+    </div>
   )
 }
 
@@ -271,6 +274,21 @@ export function SignInForm() {
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const canVerifyEmail = shouldOfferVerification(error)
+
+  async function signInAfterVerification() {
+    setError(null)
+    const result = await authClient.signIn.email({
+      email,
+      password,
+    })
+
+    if (result.error) {
+      setError(getErrorMessage(result, 'Email verified. Sign in again.'))
+      return
+    }
+
+    await navigate({ to: '/dashboard' })
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -366,7 +384,7 @@ export function SignInForm() {
             email={email}
             onError={setError}
             onSuccess={setSuccess}
-            onVerified={() => navigate({ to: '/dashboard' })}
+            onVerified={signInAfterVerification}
           />
         ) : null}
       </form>
@@ -383,6 +401,21 @@ export function SignUpForm() {
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const canVerifyEmail = Boolean(success)
+
+  async function signInAfterVerification() {
+    setError(null)
+    const result = await authClient.signIn.email({
+      email,
+      password,
+    })
+
+    if (result.error) {
+      setError(getErrorMessage(result, 'Email verified. Sign in again.'))
+      return
+    }
+
+    await navigate({ to: '/dashboard' })
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -488,7 +521,7 @@ export function SignUpForm() {
             email={email}
             onError={setError}
             onSuccess={setSuccess}
-            onVerified={() => navigate({ to: '/dashboard' })}
+            onVerified={signInAfterVerification}
           />
         ) : null}
       </form>
