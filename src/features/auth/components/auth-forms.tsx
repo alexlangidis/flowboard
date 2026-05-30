@@ -25,6 +25,10 @@ function getErrorMessage(result: AuthResult, fallback: string) {
   return result.error?.message ?? fallback
 }
 
+function getCaughtErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
+}
+
 function AuthShell({
   title,
   description,
@@ -96,8 +100,8 @@ export function SignInForm() {
       }
 
       await navigate({ to: '/dashboard' })
-    } catch {
-      setError('Unable to sign in.')
+    } catch (error) {
+      setError(getCaughtErrorMessage(error, 'Unable to sign in.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -194,8 +198,8 @@ export function SignUpForm() {
       }
 
       await navigate({ to: '/dashboard' })
-    } catch {
-      setError('Unable to create account.')
+    } catch (error) {
+      setError(getCaughtErrorMessage(error, 'Unable to create account.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -294,9 +298,7 @@ export function ForgotPasswordForm() {
         'If this email is registered in Neon Auth, a reset email will be sent.',
       )
     } catch (error) {
-      setError(
-        error instanceof Error ? error.message : 'Unable to send reset email.',
-      )
+      setError(getCaughtErrorMessage(error, 'Unable to send reset email.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -376,8 +378,8 @@ export function ResetPasswordForm() {
       }
 
       await navigate({ to: '/login' })
-    } catch {
-      setError('Unable to reset password.')
+    } catch (error) {
+      setError(getCaughtErrorMessage(error, 'Unable to reset password.'))
     } finally {
       setIsSubmitting(false)
     }
