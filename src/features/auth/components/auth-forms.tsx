@@ -37,6 +37,10 @@ function getCaughtErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback
 }
 
+function shouldOfferVerification(error: string | null) {
+  return /verify|verification|verified/i.test(error ?? '')
+}
+
 function AuthShell({
   title,
   description,
@@ -132,16 +136,72 @@ function PasswordInput({
   )
 }
 
+function ResendVerificationButton({
+  email,
+  onError,
+  onSuccess,
+}: {
+  email: string
+  onError: (message: string) => void
+  onSuccess: (message: string) => void
+}) {
+  const [isSending, setIsSending] = useState(false)
+
+  async function handleResend() {
+    if (!email) {
+      onError('Enter your email first.')
+      return
+    }
+
+    setIsSending(true)
+
+    try {
+      const result = await authClient.sendVerificationEmail({
+        email,
+        callbackURL: window.location.origin,
+      })
+
+      if (result.error) {
+        onError(getErrorMessage(result, 'Unable to send verification email.'))
+        return
+      }
+
+      onSuccess('Verification email sent. Check your inbox.')
+    } catch (error) {
+      onError(
+        getCaughtErrorMessage(error, 'Unable to send verification email.'),
+      )
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  return (
+    <Button
+      className="w-full"
+      type="button"
+      variant="outline"
+      onClick={handleResend}
+      disabled={isSending}
+    >
+      {isSending ? 'Sending verification' : 'Resend verification email'}
+      <Mail />
+    </Button>
+  )
+}
+
 export function SignInForm() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    setSuccess(null)
     setIsSubmitting(true)
 
     try {
@@ -181,6 +241,9 @@ export function SignInForm() {
     >
       <form className="grid gap-4" onSubmit={handleSubmit}>
         {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
+        {success ? (
+          <StatusMessage tone="success">{success}</StatusMessage>
+        ) : null}
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">
@@ -217,6 +280,13 @@ export function SignInForm() {
           {isSubmitting ? 'Signing in' : 'Sign in'}
           <ArrowRight />
         </Button>
+        {shouldOfferVerification(error) ? (
+          <ResendVerificationButton
+            email={email}
+            onError={setError}
+            onSuccess={setSuccess}
+          />
+        ) : null}
       </form>
     </AuthShell>
   )
@@ -228,11 +298,13 @@ export function SignUpForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    setSuccess(null)
     setIsSubmitting(true)
 
     try {
@@ -244,6 +316,11 @@ export function SignUpForm() {
 
       if (result.error) {
         setError(getErrorMessage(result, 'Unable to create account.'))
+        return
+      }
+
+      if (result.data?.user && !result.data.user.emailVerified) {
+        setSuccess('Account created. Check your email to verify before login.')
         return
       }
 
@@ -270,6 +347,9 @@ export function SignUpForm() {
     >
       <form className="grid gap-4" onSubmit={handleSubmit}>
         {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
+        {success ? (
+          <StatusMessage tone="success">{success}</StatusMessage>
+        ) : null}
         <div className="grid gap-2">
           <Label htmlFor="name">Name</Label>
           <div className="relative">
@@ -313,6 +393,13 @@ export function SignUpForm() {
           {isSubmitting ? 'Creating' : 'Create account'}
           <ArrowRight />
         </Button>
+        {success ? (
+          <ResendVerificationButton
+            email={email}
+            onError={setError}
+            onSuccess={setSuccess}
+          />
+        ) : null}
       </form>
     </AuthShell>
   )
