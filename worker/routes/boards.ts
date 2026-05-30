@@ -17,6 +17,7 @@ import {
 import { getCurrentUser } from '../lib/auth'
 import type { AppEnv } from '../lib/env'
 import { parseJsonBody } from '../lib/validation'
+import { getOrCreateDefaultWorkspace } from '../lib/workspaces'
 
 const createBoardSchema = z.object({
   name: z.string().min(1).max(80),
@@ -40,41 +41,6 @@ async function requireCurrentUser(c: Context<AppEnv>) {
   }
 
   return user
-}
-
-async function getOrCreateWorkspaceId(
-  db: ReturnType<typeof createDb>,
-  user: { id: string; name: string },
-) {
-  const [membership] = await db
-    .select({
-      workspaceId: workspaceMembers.workspaceId,
-    })
-    .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, user.id))
-    .limit(1)
-
-  if (membership) {
-    return membership.workspaceId
-  }
-
-  const [workspace] = await db
-    .insert(workspaces)
-    .values({
-      name: `${user.name}'s Workspace`,
-      ownerId: user.id,
-    })
-    .returning({
-      id: workspaces.id,
-    })
-
-  await db.insert(workspaceMembers).values({
-    workspaceId: workspace.id,
-    userId: user.id,
-    role: 'owner',
-  })
-
-  return workspace.id
 }
 
 async function getAccessibleBoard(
@@ -153,6 +119,8 @@ export const boardRoutes = new Hono<AppEnv>()
     }
 
     const db = createDb(c.env)
+    await getOrCreateDefaultWorkspace(db, user)
+
     const userBoards = await db
       .select({
         id: boards.id,
@@ -196,7 +164,7 @@ export const boardRoutes = new Hono<AppEnv>()
 
     const input = await parseJsonBody(c.req.raw, createBoardSchema)
     const db = createDb(c.env)
-    const workspaceId = await getOrCreateWorkspaceId(db, user)
+    const workspaceId = await getOrCreateDefaultWorkspace(db, user)
     const [board] = await db
       .insert(boards)
       .values({

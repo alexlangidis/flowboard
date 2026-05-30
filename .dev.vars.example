@@ -1,2 +1,11 @@
+# Cloudflare Worker local runtime
+# Wrangler reads this file for npm run dev:worker and npm run dev:full.
+
+# Used by worker/db/client.ts to connect the API to Neon Postgres.
 DATABASE_URL="postgresql://user:password@host/db?sslmode=require"
-AUTH_SECRET="replace-with-a-long-random-string"
+
+# Used by worker/lib/auth.ts to verify Neon Auth bearer JWTs.
+NEON_AUTH_URL="https://ep-xxxx.neonauth....../neondb/auth"
+
+# Attachment upload storage is not enabled yet.
+# Add an R2 binding later when the attachment upload API is implemented.

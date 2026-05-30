@@ -1,7 +1,7 @@
 export type WorkerBindings = {
   DATABASE_URL: string
-  AUTH_SECRET: string
-  ATTACHMENTS_BUCKET: R2Bucket
+  NEON_AUTH_URL?: string
+  VITE_NEON_AUTH_URL?: string
 }
 
 export type AppEnv = {

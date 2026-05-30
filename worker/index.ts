@@ -12,6 +12,12 @@ import type { AppEnv } from './lib/env'
 
 const app = new Hono<AppEnv>()
 
+app.onError((error, c) => {
+  console.error(error)
+
+  return c.json({ success: false, error: 'Internal Server Error' }, 500)
+})
+
 app.use(
   '/api/*',
   cors({

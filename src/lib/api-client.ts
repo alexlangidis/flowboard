@@ -1,3 +1,5 @@
+import { authClient } from './auth-client'
+
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
@@ -27,15 +29,39 @@ async function request<TResponse, TBody = unknown>(
   options: ApiRequestOptions<TBody> = {},
 ): Promise<TResponse> {
   const { body, headers, ...init } = options
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    ...init,
-  })
+  let response: Response
+  const session = await authClient.getSession()
+  const authHeaders: Record<string, string> = {}
+
+  if (session.data?.session.token) {
+    authHeaders.Authorization = `Bearer ${session.data.session.token}`
+  }
+
+  if (session.data?.user.email) {
+    authHeaders['X-Flowboard-User-Email'] = session.data.user.email
+  }
+
+  if (session.data?.user.name) {
+    authHeaders['X-Flowboard-User-Name'] = session.data.user.name
+  }
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...headers,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      ...init,
+    })
+  } catch {
+    throw new ApiClientError(
+      'Unable to reach the API. Start the Worker with npm run dev:full or npm run dev:worker.',
+      0,
+    )
+  }
 
   if (!response.ok) {
     let errorMessage = `Request failed with status ${response.status}`

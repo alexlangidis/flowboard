@@ -1,16 +1,24 @@
 import type { Context } from 'hono'
+import { eq, or } from 'drizzle-orm'
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 
+import { createDb } from '../db/client'
+import { users } from '../db/schema'
 import type { AppEnv } from './env'
 
-const encoder = new TextEncoder()
 const AUTH_COOKIE_NAME = 'flowboard_session'
-const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7
 
-type AuthTokenPayload = {
-  sub: string
-  email: string
-  name: string
-  exp: number
+type NeonAuthJwtPayload = {
+  sub?: string
+  userId?: string
+  email?: string
+  name?: string
+}
+
+type AuthUserInput = {
+  authUserId: string
+  email?: string
+  name?: string
 }
 
 export type CurrentUser = {
@@ -19,154 +27,125 @@ export type CurrentUser = {
   name: string
 }
 
-function base64UrlEncode(value: ArrayBuffer | string) {
-  const bytes =
-    typeof value === 'string' ? encoder.encode(value) : new Uint8Array(value)
-  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')
-
-  return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '')
+function getNeonAuthUrl(c: Context<AppEnv>) {
+  return c.env.NEON_AUTH_URL ?? c.env.VITE_NEON_AUTH_URL
 }
 
-function base64UrlDecode(value: string) {
-  const normalized = value.replaceAll('-', '+').replaceAll('_', '/')
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    '=',
-  )
-  const binary = atob(padded)
-
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
+function getNeonAuthJwksUrl(authUrl: string) {
+  return new URL(`${authUrl.replace(/\/+$/, '')}/.well-known/jwks.json`)
 }
 
-async function importHmacKey(secret: string) {
-  return crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify'],
-  )
-}
+async function verifyNeonAuthToken(token: string, c: Context<AppEnv>) {
+  const authUrl = getNeonAuthUrl(c)
 
-async function sign(value: string, secret: string) {
-  const key = await importHmacKey(secret)
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value))
-
-  return base64UrlEncode(signature)
-}
-
-async function verifySignature(
-  value: string,
-  signature: string,
-  secret: string,
-) {
-  const key = await importHmacKey(secret)
-
-  return crypto.subtle.verify(
-    'HMAC',
-    key,
-    base64UrlDecode(signature),
-    encoder.encode(value),
-  )
-}
-
-async function derivePasswordHash(password: string, salt: Uint8Array) {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits'],
-  )
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      hash: 'SHA-256',
-      salt,
-      iterations: 100_000,
-    },
-    key,
-    256,
-  )
-
-  return base64UrlEncode(bits)
-}
-
-export async function hashPassword(password: string) {
-  const salt = crypto.getRandomValues(new Uint8Array(16))
-  const hash = await derivePasswordHash(password, salt)
-
-  return `pbkdf2_sha256$100000$${base64UrlEncode(salt.buffer)}$${hash}`
-}
-
-export async function verifyPassword(password: string, storedHash: string) {
-  const [algorithm, , encodedSalt, expectedHash] = storedHash.split('$')
-
-  if (algorithm !== 'pbkdf2_sha256' || !encodedSalt || !expectedHash) {
-    return false
+  if (!authUrl) {
+    throw new Error('NEON_AUTH_URL is required for API authentication.')
   }
 
-  const hash = await derivePasswordHash(password, base64UrlDecode(encodedSalt))
-
-  return hash === expectedHash
-}
-
-export async function createAuthToken(user: CurrentUser, secret: string) {
-  const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-  const payload = base64UrlEncode(
-    JSON.stringify({
-      sub: user.id,
-      email: user.email,
-      name: user.name,
-      exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
-    } satisfies AuthTokenPayload),
+  const { payload } = await jwtVerify(
+    token,
+    createRemoteJWKSet(getNeonAuthJwksUrl(authUrl)),
   )
-  const signingInput = `${header}.${payload}`
-  const signature = await sign(signingInput, secret)
+  const neonPayload = payload as NeonAuthJwtPayload
+  const authUserId = neonPayload.userId ?? neonPayload.sub
 
-  return `${signingInput}.${signature}`
-}
-
-export async function verifyAuthToken(token: string, secret: string) {
-  const [header, payload, signature] = token.split('.')
-
-  if (!header || !payload || !signature) {
-    return null
-  }
-
-  const valid = await verifySignature(`${header}.${payload}`, signature, secret)
-
-  if (!valid) {
-    return null
-  }
-
-  const decoded = new TextDecoder().decode(base64UrlDecode(payload))
-  const tokenPayload = JSON.parse(decoded) as AuthTokenPayload
-
-  if (tokenPayload.exp < Math.floor(Date.now() / 1000)) {
+  if (!authUserId) {
     return null
   }
 
   return {
-    id: tokenPayload.sub,
-    email: tokenPayload.email,
-    name: tokenPayload.name,
+    authUserId,
+    email: neonPayload.email,
+    name: neonPayload.name,
+  }
+}
+
+function serializeCurrentUser(user: {
+  id: string
+  email: string
+  name: string
+}) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
   } satisfies CurrentUser
 }
 
-function getCookieValue(cookieHeader: string | undefined, name: string) {
-  return cookieHeader
-    ?.split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${name}=`))
-    ?.slice(name.length + 1)
+async function findExistingCurrentUser(
+  db: ReturnType<typeof createDb>,
+  authUser: AuthUserInput,
+) {
+  const where = authUser.email
+    ? or(
+        eq(users.authUserId, authUser.authUserId),
+        eq(users.email, authUser.email),
+      )
+    : eq(users.authUserId, authUser.authUserId)
+
+  return db.query.users.findFirst({ where })
 }
 
-export function createAuthCookie(token: string) {
-  return `${AUTH_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${TOKEN_TTL_SECONDS}`
+async function getOrCreateCurrentUser(
+  c: Context<AppEnv>,
+  authUser: AuthUserInput,
+) {
+  const db = createDb(c.env)
+  const existingUser = await findExistingCurrentUser(db, authUser)
+
+  if (existingUser) {
+    if (existingUser.authUserId === authUser.authUserId) {
+      return serializeCurrentUser(existingUser)
+    }
+
+    const [linkedUser] = await db
+      .update(users)
+      .set({
+        authUserId: authUser.authUserId,
+        name: authUser.name ?? existingUser.name,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, existingUser.id))
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+      })
+
+    if (linkedUser) {
+      return serializeCurrentUser(linkedUser)
+    }
+  }
+
+  try {
+    const [createdUser] = await db
+      .insert(users)
+      .values({
+        authUserId: authUser.authUserId,
+        email: authUser.email ?? `${authUser.authUserId}@neon-auth.local`,
+        name: authUser.name ?? c.req.header('X-Flowboard-User-Name') ?? 'User',
+        passwordHash: 'neon-auth-managed',
+      })
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+      })
+
+    if (createdUser) {
+      return serializeCurrentUser(createdUser)
+    }
+  } catch (error) {
+    const racedUser = await findExistingCurrentUser(db, authUser)
+
+    if (racedUser) {
+      return serializeCurrentUser(racedUser)
+    }
+
+    throw error
+  }
+
+  throw new Error('Unable to create current user.')
 }
 
 export function clearAuthCookie() {
@@ -178,12 +157,16 @@ export async function getCurrentUser(c: Context<AppEnv>) {
   const bearerToken = authHeader?.startsWith('Bearer ')
     ? authHeader.slice('Bearer '.length)
     : undefined
-  const cookieToken = getCookieValue(c.req.header('Cookie'), AUTH_COOKIE_NAME)
-  const token = bearerToken ?? cookieToken
 
-  if (!token) {
-    return null
+  if (bearerToken) {
+    const authUser = await verifyNeonAuthToken(bearerToken, c)
+
+    if (!authUser) {
+      return null
+    }
+
+    return getOrCreateCurrentUser(c, authUser)
   }
 
-  return verifyAuthToken(token, c.env.AUTH_SECRET)
+  return null
 }

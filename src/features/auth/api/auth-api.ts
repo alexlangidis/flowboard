@@ -1,34 +1,34 @@
-import { apiClient } from '@/lib/api-client'
+import { authClient } from '@/lib/auth-client'
 
 import type { AuthResponse } from '../types'
-import type { LoginInput, RegisterInput } from '../schemas/auth-schemas'
 
-export function login(input: LoginInput) {
-  return apiClient.post<AuthResponse, LoginInput>('/api/auth/login', input, {
-    credentials: 'include',
-  })
-}
+export async function getCurrentUser(): Promise<AuthResponse> {
+  const session = await authClient.getSession()
 
-export function register(input: RegisterInput) {
-  return apiClient.post<AuthResponse, RegisterInput>(
-    '/api/auth/register',
-    input,
-    {
-      credentials: 'include',
+  if (!session.data?.user) {
+    return { success: true, data: { user: null } }
+  }
+
+  const { user } = session.data
+
+  return {
+    success: true,
+    data: {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
     },
-  )
+  }
 }
 
-export function getCurrentUser() {
-  return apiClient.get<AuthResponse>('/api/auth/me', {
-    credentials: 'include',
-  })
-}
+export async function logout() {
+  const result = await authClient.signOut()
 
-export function logout() {
-  return apiClient.post<{ success: true; data: { ok: true } }, undefined>(
-    '/api/auth/logout',
-    undefined,
-    { credentials: 'include' },
-  )
+  if (result.error) {
+    throw new Error(result.error.message ?? 'Unable to sign out.')
+  }
+
+  return { success: true, data: { ok: true } } as const
 }

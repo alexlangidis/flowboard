@@ -1,8 +1,9 @@
-name = "flowboard-api"
+name = "flowboard"
 main = "worker/index.ts"
 compatibility_date = "2026-05-27"
 compatibility_flags = ["nodejs_compat"]
 
-[[r2_buckets]]
-binding = "ATTACHMENTS_BUCKET"
-bucket_name = "flowboard-attachments"
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]

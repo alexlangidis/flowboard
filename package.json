@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:full": "sh -c 'npm run dev:worker -- --ip 127.0.0.1 --port 8787 & worker_pid=$!; trap \"kill $worker_pid\" EXIT; npm run dev -- --host 127.0.0.1'",
     "routes:generate": "tsr generate",
     "dev:worker": "wrangler dev worker/index.ts",
     "build": "tsc -b && vite build",
@@ -26,6 +27,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource-variable/geist": "^5.2.9",
+    "@neondatabase/auth": "^0.3.0-beta",
     "@neondatabase/serverless": "^1.1.0",
     "@tanstack/react-form": "^1.32.1",
     "@tanstack/react-query": "^5.100.14",
@@ -35,6 +37,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.23",
+    "jose": "^6.2.3",
     "lucide-react": "^1.16.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.6",
@@ -71,5 +74,10 @@
     "vite": "^8.0.12",
     "vitest": "^4.1.7",
     "wrangler": "^4.95.0"
+  },
+  "overrides": {
+    "better-auth": "1.6.12",
+    "@better-auth/passkey": "1.6.12",
+    "esbuild": "0.28.0"
   }
 }
