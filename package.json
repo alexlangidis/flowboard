@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "sh -c 'npm run dev:worker -- --ip 127.0.0.1 --port 8787 & worker_pid=$!; trap \"kill $worker_pid\" EXIT; npm run dev -- --host 127.0.0.1'",
+    "dev:full:remote": "sh -c 'npm run dev:worker:remote -- --ip 127.0.0.1 --port 8787 & worker_pid=$!; trap \"kill $worker_pid\" EXIT; npm run dev -- --host 127.0.0.1'",
     "routes:generate": "tsr generate",
     "dev:worker": "wrangler dev worker/index.ts",
+    "dev:worker:remote": "wrangler dev worker/index.ts -c wrangler.remote.toml",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "format": "prettier --write .",

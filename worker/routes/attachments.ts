@@ -237,26 +237,52 @@ export const attachmentRoutes = new Hono<AppEnv>()
       },
     })
 
-    const [attachment] = await db
-      .insert(attachments)
-      .values({
-        id: attachmentId,
+    const uploadedObject = await c.env.ATTACHMENTS_BUCKET.head(objectKey)
+
+    if (!uploadedObject) {
+      console.error('R2 attachment upload verification failed', {
+        attachmentId,
         cardId,
-        uploadedById: user.id,
-        fileName: safeFileName,
         objectKey,
-        contentType: file.type,
-        sizeBytes: file.size,
       })
-      .returning({
-        id: attachments.id,
-        cardId: attachments.cardId,
-        uploadedById: attachments.uploadedById,
-        fileName: attachments.fileName,
-        contentType: attachments.contentType,
-        sizeBytes: attachments.sizeBytes,
-        createdAt: attachments.createdAt,
-      })
+
+      return c.json(
+        { success: false, error: 'Unable to store attachment file' },
+        500,
+      )
+    }
+
+    const insertAttachment = () =>
+      db
+        .insert(attachments)
+        .values({
+          id: attachmentId,
+          cardId,
+          uploadedById: user.id,
+          fileName: safeFileName,
+          objectKey,
+          contentType: file.type,
+          sizeBytes: file.size,
+        })
+        .returning({
+          id: attachments.id,
+          cardId: attachments.cardId,
+          uploadedById: attachments.uploadedById,
+          fileName: attachments.fileName,
+          contentType: attachments.contentType,
+          sizeBytes: attachments.sizeBytes,
+          createdAt: attachments.createdAt,
+        })
+
+    let attachment: Awaited<ReturnType<typeof insertAttachment>>[number]
+
+    try {
+      const [createdAttachment] = await insertAttachment()
+      attachment = createdAttachment
+    } catch (error) {
+      await c.env.ATTACHMENTS_BUCKET.delete(objectKey)
+      throw error
+    }
 
     return c.json(
       {
