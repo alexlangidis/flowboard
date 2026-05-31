@@ -15,7 +15,12 @@ import type { AppEnv } from '../lib/env'
 import { parseJsonBody } from '../lib/validation'
 
 const allowedContentTypes = new Set([
+  'application/msword',
   'application/pdf',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/csv',
   'image/gif',
   'image/jpeg',
   'image/png',
@@ -24,6 +29,7 @@ const allowedContentTypes = new Set([
 ])
 const maxAttachmentSizeBytes = 10 * 1024 * 1024
 const maxAttachmentsPerCard = 10
+const maxAttachmentsPerUser = 100
 
 const updateAttachmentSchema = z.object({
   fileName: z.string().min(1).max(180),
@@ -65,6 +71,20 @@ function serializeAttachment(attachment: {
     sizeBytes: attachment.sizeBytes,
     createdAt: attachment.createdAt.toISOString(),
   }
+}
+
+function logR2Operation(
+  operation: 'delete' | 'get' | 'head' | 'put',
+  details: {
+    attachmentId: string
+    cardId: string
+    mode?: 'download' | 'open' | 'rollback'
+  },
+) {
+  console.info('r2_operation', {
+    operation,
+    ...details,
+  })
 }
 
 async function getAccessibleCard(
@@ -194,6 +214,21 @@ export const attachmentRoutes = new Hono<AppEnv>()
       )
     }
 
+    const [{ count: userAttachmentCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(attachments)
+      .where(eq(attachments.uploadedById, user.id))
+
+    if (userAttachmentCount >= maxAttachmentsPerUser) {
+      return c.json(
+        {
+          success: false,
+          error: `Your account can store up to ${maxAttachmentsPerUser} attachments`,
+        },
+        400,
+      )
+    }
+
     const formData = await c.req.raw.formData()
     const file = formData.get('file') as unknown
 
@@ -236,8 +271,10 @@ export const attachmentRoutes = new Hono<AppEnv>()
         uploadedById: user.id,
       },
     })
+    logR2Operation('put', { attachmentId, cardId })
 
     const uploadedObject = await c.env.ATTACHMENTS_BUCKET.head(objectKey)
+    logR2Operation('head', { attachmentId, cardId })
 
     if (!uploadedObject) {
       console.error('R2 attachment upload verification failed', {
@@ -281,6 +318,11 @@ export const attachmentRoutes = new Hono<AppEnv>()
       attachment = createdAttachment
     } catch (error) {
       await c.env.ATTACHMENTS_BUCKET.delete(objectKey)
+      logR2Operation('delete', {
+        attachmentId,
+        cardId,
+        mode: 'rollback',
+      })
       throw error
     }
 
@@ -349,6 +391,10 @@ export const attachmentRoutes = new Hono<AppEnv>()
     }
 
     await c.env.ATTACHMENTS_BUCKET.delete(attachment.objectKey)
+    logR2Operation('delete', {
+      attachmentId,
+      cardId: attachment.cardId,
+    })
     await db.delete(attachments).where(eq(attachments.id, attachmentId))
 
     return c.json({
@@ -383,6 +429,11 @@ export const attachmentRoutes = new Hono<AppEnv>()
     }
 
     const object = await c.env.ATTACHMENTS_BUCKET.get(attachment.objectKey)
+    logR2Operation('get', {
+      attachmentId: attachment.id,
+      cardId: attachment.cardId,
+      mode,
+    })
 
     if (!object) {
       return c.json({ success: false, error: 'Attachment file not found' }, 404)

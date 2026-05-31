@@ -738,6 +738,7 @@ export function CardDetailDialog({
                 ref={attachmentInputRef}
                 className="sr-only"
                 type="file"
+                accept=".csv,.doc,.docx,.gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.xls,.xlsx,application/msword,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/gif,image/jpeg,image/png,image/webp,text/csv,text/plain"
                 multiple
                 onChange={(event) =>
                   void handleAddAttachments(event.target.files)
