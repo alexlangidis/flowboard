@@ -45,11 +45,11 @@ export type ChecklistItem = {
 }
 
 export type CardAttachmentItem = {
-  file: File
   id: string
   name: string
   size: number
-  url: string
+  contentType: string | null
+  createdAt: string
 }
 
 export const boardThemes: BoardTheme[] = [

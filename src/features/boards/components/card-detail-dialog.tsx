@@ -39,6 +39,13 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/features/auth/api/auth-api'
 import {
+  deleteAttachment,
+  getAttachmentBlob,
+  listCardAttachments,
+  updateAttachmentName,
+  uploadCardAttachment,
+} from '@/features/boards/api/attachments-api'
+import {
   useCreateCardCommentMutation,
   useDeleteCardCommentMutation,
   useUpdateCardCommentMutation,
@@ -111,6 +118,7 @@ export function CardDetailDialog({
   const [editingCommentText, setEditingCommentText] = useState('')
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
   const [hideCheckedItems, setHideCheckedItems] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   const [membersPopoverOpen, setMembersPopoverOpen] = useState(false)
@@ -157,6 +165,46 @@ export function CardDetailDialog({
       ignore = true
     }
   }, [])
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadAttachments() {
+      if (!open) {
+        return
+      }
+
+      try {
+        const response = await listCardAttachments(card.id)
+
+        if (!ignore) {
+          setAttachments(
+            response.data.attachments.map((attachment) => ({
+              id: attachment.id,
+              name: attachment.fileName,
+              size: attachment.sizeBytes ?? 0,
+              contentType: attachment.contentType,
+              createdAt: attachment.createdAt,
+            })),
+          )
+        }
+      } catch (error) {
+        if (!ignore) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : 'Unable to load attachments.',
+          )
+        }
+      }
+    }
+
+    void loadAttachments()
+
+    return () => {
+      ignore = true
+    }
+  }, [card.id, open])
 
   function scrollToSection(ref: RefObject<HTMLDivElement | null>) {
     ref.current?.scrollIntoView({
@@ -348,64 +396,120 @@ export function CardDetailDialog({
     )
   }
 
-  function handleAddAttachments(files: FileList | null) {
+  async function handleAddAttachments(files: FileList | null) {
     if (!files?.length) {
       return
     }
 
-    setAttachments((current) => [
-      ...current,
-      ...Array.from(files).map((file) => ({
-        file,
-        id: crypto.randomUUID(),
-        name: file.name,
-        size: file.size,
-        url: URL.createObjectURL(file),
-      })),
-    ])
+    setIsUploadingAttachment(true)
+
+    try {
+      const uploadedAttachments = await Promise.all(
+        Array.from(files).map((file) => uploadCardAttachment(card.id, file)),
+      )
+
+      setAttachments((current) => [
+        ...current,
+        ...uploadedAttachments.map((response) => ({
+          id: response.data.attachment.id,
+          name: response.data.attachment.fileName,
+          size: response.data.attachment.sizeBytes ?? 0,
+          contentType: response.data.attachment.contentType,
+          createdAt: response.data.attachment.createdAt,
+        })),
+      ])
+      toast.success(
+        files.length === 1 ? 'Attachment uploaded.' : 'Attachments uploaded.',
+      )
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to upload attachment.',
+      )
+    } finally {
+      setIsUploadingAttachment(false)
+    }
 
     if (attachmentInputRef.current) {
       attachmentInputRef.current.value = ''
     }
   }
 
-  function handleSaveAttachmentName(attachmentId: string) {
+  async function handleSaveAttachmentName(attachmentId: string) {
     if (!editingAttachmentName.trim()) {
       return
     }
 
-    setAttachments((current) =>
-      current.map((attachment) =>
-        attachment.id === attachmentId
-          ? {
-              ...attachment,
-              name: editingAttachmentName.trim(),
-            }
-          : attachment,
-      ),
-    )
-    setEditingAttachmentId(null)
-    setEditingAttachmentName('')
+    try {
+      const response = await updateAttachmentName(
+        attachmentId,
+        editingAttachmentName.trim(),
+      )
+
+      setAttachments((current) =>
+        current.map((attachment) =>
+          attachment.id === attachmentId
+            ? {
+                ...attachment,
+                name: response.data.attachment.fileName,
+              }
+            : attachment,
+        ),
+      )
+      setEditingAttachmentId(null)
+      setEditingAttachmentName('')
+      toast.success('Attachment renamed.')
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to rename attachment.',
+      )
+    }
   }
 
-  function handleDeleteAttachment(attachmentId: string) {
-    setAttachments((current) => {
-      const attachment = current.find((item) => item.id === attachmentId)
-
-      if (attachment) {
-        URL.revokeObjectURL(attachment.url)
-      }
-
-      return current.filter((item) => item.id !== attachmentId)
-    })
+  async function handleDeleteAttachment(attachmentId: string) {
+    try {
+      await deleteAttachment(attachmentId)
+      setAttachments((current) =>
+        current.filter((item) => item.id !== attachmentId),
+      )
+      toast.success('Attachment deleted.')
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to delete attachment.',
+      )
+    }
   }
 
-  function handleDownloadAttachment(attachment: CardAttachmentItem) {
-    const anchor = document.createElement('a')
+  async function handleOpenAttachment(attachment: CardAttachmentItem) {
+    try {
+      const blob = await getAttachmentBlob(attachment.id, 'open')
+      const url = URL.createObjectURL(blob)
 
-    anchor.href = attachment.url
-    anchor.download = attachment.name
-    anchor.click()
+      window.open(url, '_blank', 'noopener')
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to open attachment.',
+      )
+    }
+  }
+
+  async function handleDownloadAttachment(attachment: CardAttachmentItem) {
+    try {
+      const blob = await getAttachmentBlob(attachment.id, 'download')
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+
+      anchor.href = url
+      anchor.download = attachment.name
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Unable to download attachment.',
+      )
+    }
   }
 
   return (
@@ -635,7 +739,9 @@ export function CardDetailDialog({
                 className="sr-only"
                 type="file"
                 multiple
-                onChange={(event) => handleAddAttachments(event.target.files)}
+                onChange={(event) =>
+                  void handleAddAttachments(event.target.files)
+                }
               />
             </div>
 
@@ -896,9 +1002,10 @@ export function CardDetailDialog({
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={isUploadingAttachment}
                     onClick={() => attachmentInputRef.current?.click()}
                   >
-                    Add
+                    {isUploadingAttachment ? 'Uploading...' : 'Add'}
                   </Button>
                 </div>
                 <div className="mt-4 flex flex-col gap-2">
@@ -925,7 +1032,7 @@ export function CardDetailDialog({
                                 type="button"
                                 size="sm"
                                 onClick={() =>
-                                  handleSaveAttachmentName(attachment.id)
+                                  void handleSaveAttachmentName(attachment.id)
                                 }
                                 disabled={!editingAttachmentName.trim()}
                               >
@@ -960,9 +1067,7 @@ export function CardDetailDialog({
                         variant="ghost"
                         size="icon-xs"
                         aria-label={`Open ${attachment.name}`}
-                        onClick={() =>
-                          window.open(attachment.url, '_blank', 'noopener')
-                        }
+                        onClick={() => void handleOpenAttachment(attachment)}
                       >
                         <ExternalLink aria-hidden="true" />
                       </Button>
@@ -980,7 +1085,7 @@ export function CardDetailDialog({
                         <DropdownMenuContent align="end" className="w-44">
                           <DropdownMenuItem
                             onSelect={() =>
-                              window.open(attachment.url, '_blank', 'noopener')
+                              void handleOpenAttachment(attachment)
                             }
                           >
                             <ExternalLink aria-hidden="true" />
@@ -997,7 +1102,7 @@ export function CardDetailDialog({
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() =>
-                              handleDownloadAttachment(attachment)
+                              void handleDownloadAttachment(attachment)
                             }
                           >
                             <Download aria-hidden="true" />
@@ -1007,7 +1112,7 @@ export function CardDetailDialog({
                           <DropdownMenuItem
                             variant="destructive"
                             onSelect={() =>
-                              handleDeleteAttachment(attachment.id)
+                              void handleDeleteAttachment(attachment.id)
                             }
                           >
                             <Trash2 aria-hidden="true" />
