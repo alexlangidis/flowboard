@@ -1,4 +1,4 @@
-import { authClient } from '@/lib/auth-client'
+import { getApiAuthHeaders } from '@/lib/api-auth'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -38,25 +38,6 @@ type ApiErrorResponse = {
   message?: string
 }
 
-async function getAuthHeaders() {
-  const session = await authClient.getSession()
-  const headers: Record<string, string> = {}
-
-  if (session.data?.session.token) {
-    headers.Authorization = `Bearer ${session.data.session.token}`
-  }
-
-  if (session.data?.user.email) {
-    headers['X-Flowboard-User-Email'] = session.data.user.email
-  }
-
-  if (session.data?.user.name) {
-    headers['X-Flowboard-User-Name'] = session.data.user.name
-  }
-
-  return headers
-}
-
 async function parseResponse<TResponse>(response: Response) {
   if (!response.ok) {
     let errorMessage = `Request failed with status ${response.status}`
@@ -75,7 +56,7 @@ async function parseResponse<TResponse>(response: Response) {
 }
 
 async function request<TResponse>(path: string, init: RequestInit = {}) {
-  const authHeaders = await getAuthHeaders()
+  const authHeaders = await getApiAuthHeaders()
   const headers = new Headers(init.headers)
 
   for (const [key, value] of Object.entries(authHeaders)) {
@@ -130,7 +111,7 @@ export async function getAttachmentBlob(
   attachmentId: string,
   mode: 'download' | 'open',
 ) {
-  const authHeaders = await getAuthHeaders()
+  const authHeaders = await getApiAuthHeaders()
   const response = await fetch(
     `${API_BASE_URL}/api/attachments/${attachmentId}/${mode}`,
     {

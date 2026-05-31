@@ -7,5 +7,5 @@ DATABASE_URL="postgresql://user:password@host/db?sslmode=require"
 # Used by worker/lib/auth.ts to verify Neon Auth bearer JWTs.
 NEON_AUTH_URL="https://ep-xxxx.neonauth....../neondb/auth"
 
-# Attachment upload storage is not enabled yet.
-# Add an R2 binding later when the attachment upload API is implemented.
+# Attachment uploads use the ATTACHMENTS_BUCKET R2 binding in wrangler.toml.
+# Do not add R2 API keys here for normal Worker runtime access.

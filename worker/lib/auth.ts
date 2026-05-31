@@ -123,7 +123,7 @@ async function getOrCreateCurrentUser(
       .values({
         authUserId: authUser.authUserId,
         email: authUser.email ?? `${authUser.authUserId}@neon-auth.local`,
-        name: authUser.name ?? c.req.header('X-Flowboard-User-Name') ?? 'User',
+        name: authUser.name ?? 'User',
         passwordHash: 'neon-auth-managed',
       })
       .returning({

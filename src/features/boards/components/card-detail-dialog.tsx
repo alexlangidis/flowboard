@@ -1,17 +1,7 @@
 import {
-  AlignLeft,
   Check,
   CheckCircle2,
-  Download,
-  Edit3,
-  ExternalLink,
-  MessageSquare,
-  MoreHorizontal,
   Paperclip,
-  Pencil,
-  Square,
-  SquareCheckBig,
-  Trash2,
   Users,
   X,
 } from 'lucide-react'
@@ -26,17 +16,8 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/features/auth/api/auth-api'
 import {
   deleteAttachment,
@@ -45,6 +26,15 @@ import {
   updateAttachmentName,
   uploadCardAttachment,
 } from '@/features/boards/api/attachments-api'
+import { CardDetailActivity } from '@/features/boards/components/card-detail-activity'
+import { CardDetailAttachments } from '@/features/boards/components/card-detail-attachments'
+import { CardDetailChecklist } from '@/features/boards/components/card-detail-checklist'
+import { CardDetailDescription } from '@/features/boards/components/card-detail-description'
+import { CardDetailTitle } from '@/features/boards/components/card-detail-title'
+import {
+  attachmentAccept,
+  getInitials,
+} from '@/features/boards/components/card-detail-utils'
 import {
   useCreateCardCommentMutation,
   useDeleteCardCommentMutation,
@@ -57,27 +47,6 @@ import type {
   ChecklistItem,
 } from '@/features/boards/lib/board-style'
 import type { BoardCard } from '@/features/boards/types'
-
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('')
-}
-
-function formatFileSize(size: number) {
-  if (size < 1024) {
-    return `${size} B`
-  }
-
-  if (size < 1024 * 1024) {
-    return `${Math.round(size / 1024)} KB`
-  }
-
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
 
 export function CardDetailDialog({
   boardId,
@@ -540,95 +509,23 @@ export function CardDetailDialog({
         </DialogHeader>
         <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_28rem]">
           <section className="min-h-0 min-w-0 overflow-y-auto px-6 py-6">
-            <div
-              className={
-                isEditingTitle
-                  ? 'grid grid-cols-[1.5rem_minmax(0,1fr)] items-start gap-3'
-                  : 'grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3'
-              }
-            >
-              <button
-                type="button"
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label={
-                  card.completed
-                    ? `Mark ${card.title} incomplete`
-                    : `Mark ${card.title} complete`
-                }
-                title={card.completed ? 'Mark incomplete' : 'Mark complete'}
-                onClick={() => void handleToggleCompleted()}
-                disabled={!boardId || updateCardMutation.isPending}
-              >
-                {card.completed ? (
-                  <SquareCheckBig
-                    aria-hidden="true"
-                    className="size-5 text-emerald-600"
-                  />
-                ) : (
-                  <Square aria-hidden="true" className="size-5" />
-                )}
-              </button>
-              {isEditingTitle ? (
-                <div className="min-w-0 overflow-hidden">
-                  <Textarea
-                    value={title}
-                    aria-invalid={Boolean(titleError)}
-                    onChange={(event) => setTitle(event.target.value)}
-                    className="min-h-10 w-full resize-none rounded-md border-transparent bg-muted/35 px-2 py-1 text-2xl leading-tight font-semibold tracking-tight shadow-none [field-sizing:content] focus-visible:border-transparent focus-visible:ring-0"
-                    rows={1}
-                    autoFocus
-                  />
-                  {titleError && (
-                    <p className="mt-2 text-sm text-destructive">
-                      {titleError}
-                    </p>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void handleSaveTitle()}
-                      disabled={updateCardMutation.isPending}
-                    >
-                      {updateCardMutation.isPending ? 'Saving...' : 'Save'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setTitle(card.title)
-                        setTitleError(null)
-                        setIsEditingTitle(false)
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <DialogTitle
-                    className="min-w-0 break-words text-3xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere]"
-                    title={boardId ? 'Double-click to edit title' : undefined}
-                    onDoubleClick={startEditingTitle}
-                  >
-                    {card.title}
-                  </DialogTitle>
-                  {boardId && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Edit card title"
-                      onClick={startEditingTitle}
-                    >
-                      <Pencil aria-hidden="true" />
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
+            <CardDetailTitle
+              boardId={boardId}
+              completed={card.completed}
+              isEditing={isEditingTitle}
+              isPending={updateCardMutation.isPending}
+              onCancel={() => {
+                setTitle(card.title)
+                setTitleError(null)
+                setIsEditingTitle(false)
+              }}
+              onEdit={startEditingTitle}
+              onSave={() => void handleSaveTitle()}
+              onTitleChange={setTitle}
+              onToggleCompleted={() => void handleToggleCompleted()}
+              title={isEditingTitle ? title : card.title}
+              titleError={titleError}
+            />
 
             <div className="mt-6 flex flex-wrap gap-2 pl-9">
               <Button
@@ -738,7 +635,7 @@ export function CardDetailDialog({
                 ref={attachmentInputRef}
                 className="sr-only"
                 type="file"
-                accept=".csv,.doc,.docx,.gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.xls,.xlsx,application/msword,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/gif,image/jpeg,image/png,image/webp,text/csv,text/plain"
+                accept={attachmentAccept}
                 multiple
                 onChange={(event) =>
                   void handleAddAttachments(event.target.files)
@@ -746,218 +643,65 @@ export function CardDetailDialog({
               />
             </div>
 
-            <section className="mt-8 pl-9">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <AlignLeft
-                    aria-hidden="true"
-                    className="size-5 text-muted-foreground"
-                  />
-                  <h3 className="text-base font-semibold">Description</h3>
-                </div>
-                {!isEditingDescription && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditingDescription(true)}
-                  >
-                    Edit
-                  </Button>
-                )}
-              </div>
-              {isEditingDescription ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  <Textarea
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    placeholder="Add a description..."
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => void handleSaveDescription()}
-                      disabled={updateCardMutation.isPending}
-                    >
-                      {updateCardMutation.isPending ? 'Saving...' : 'Save'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setDescription(card.description ?? '')
-                        setIsEditingDescription(false)
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4 rounded-lg bg-muted/40 p-4">
-                  <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                    {card.description || 'No description yet.'}
-                  </p>
-                </div>
-              )}
-            </section>
+            <CardDetailDescription
+              description={
+                isEditingDescription ? description : (card.description ?? '')
+              }
+              isEditing={isEditingDescription}
+              isPending={updateCardMutation.isPending}
+              onCancel={() => {
+                setDescription(card.description ?? '')
+                setIsEditingDescription(false)
+              }}
+              onChange={setDescription}
+              onEdit={() => setIsEditingDescription(true)}
+              onSave={() => void handleSaveDescription()}
+            />
 
-            <section ref={checklistRef} className="mt-8 pl-9">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2
-                    aria-hidden="true"
-                    className="size-5 text-muted-foreground"
-                  />
-                  <h3 className="text-base font-semibold">Checklist</h3>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {checklistCompletedCount > 0 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setHideCheckedItems((current) => !current)}
-                    >
-                      {hideCheckedItems
-                        ? 'Show checked items'
-                        : 'Hide checked items'}
-                    </Button>
-                  )}
-                  {checklistItems.length > 0 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setChecklistItems([])}
-                    >
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="mt-4 flex items-center gap-3">
-                <span className="w-9 text-xs text-muted-foreground">
-                  {checklistProgress}%
-                </span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all"
-                    style={{ width: `${checklistProgress}%` }}
-                  />
-                </div>
-              </div>
-              <div className="mt-4 flex flex-col gap-2">
-                {visibleChecklistItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-start gap-3 rounded-lg border bg-background/70 p-2"
-                  >
-                    <button
-                      type="button"
-                      className="mt-1 flex size-4 shrink-0 items-center justify-center rounded border border-input text-emerald-600"
-                      aria-label={
-                        item.completed
-                          ? `Mark ${item.text} incomplete`
-                          : `Mark ${item.text} complete`
-                      }
-                      onClick={() =>
-                        setChecklistItems((current) =>
-                          current.map((currentItem) =>
-                            currentItem.id === item.id
-                              ? {
-                                  ...currentItem,
-                                  completed: !currentItem.completed,
-                                }
-                              : currentItem,
-                          ),
-                        )
-                      }
-                    >
-                      {item.completed && (
-                        <Check aria-hidden="true" className="size-3" />
-                      )}
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      {editingChecklistItemId === item.id ? (
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <Input
-                            value={editingChecklistItemText}
-                            onChange={(event) =>
-                              setEditingChecklistItemText(event.target.value)
-                            }
-                            autoFocus
-                          />
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => handleSaveChecklistItem(item.id)}
-                              disabled={!editingChecklistItemText.trim()}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingChecklistItemId(null)
-                                setEditingChecklistItemText('')
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className={
-                            item.completed
-                              ? 'min-w-0 text-left text-sm text-muted-foreground line-through'
-                              : 'min-w-0 text-left text-sm'
-                          }
-                          onClick={() => {
-                            setEditingChecklistItemId(item.id)
-                            setEditingChecklistItemText(item.text)
-                          }}
-                        >
-                          {item.text}
-                        </button>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={`Remove ${item.text}`}
-                      onClick={() =>
-                        setChecklistItems((current) =>
-                          current.filter(
-                            (currentItem) => currentItem.id !== item.id,
-                          ),
-                        )
-                      }
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <form
-                className="mt-3 flex flex-col gap-2 sm:flex-row"
-                onSubmit={handleAddChecklistItem}
-              >
-                <Input
-                  value={checklistText}
-                  onChange={(event) => setChecklistText(event.target.value)}
-                  placeholder="Add an item"
-                />
-                <Button type="submit" disabled={!checklistText.trim()}>
-                  Add
-                </Button>
-              </form>
-            </section>
+            <CardDetailChecklist
+              checklistProgress={checklistProgress}
+              completedCount={checklistCompletedCount}
+              editingItemId={editingChecklistItemId}
+              editingItemText={editingChecklistItemText}
+              hideCheckedItems={hideCheckedItems}
+              items={checklistItems}
+              onAddItem={handleAddChecklistItem}
+              onClearItems={() => setChecklistItems([])}
+              onEditingItemTextChange={setEditingChecklistItemText}
+              onHideCheckedItemsChange={() =>
+                setHideCheckedItems((current) => !current)
+              }
+              onItemTextChange={setChecklistText}
+              onRemoveItem={(itemId) =>
+                setChecklistItems((current) =>
+                  current.filter((item) => item.id !== itemId),
+                )
+              }
+              onSaveItem={handleSaveChecklistItem}
+              onStartEditItem={(item) => {
+                setEditingChecklistItemId(item.id)
+                setEditingChecklistItemText(item.text)
+              }}
+              onStopEditItem={() => {
+                setEditingChecklistItemId(null)
+                setEditingChecklistItemText('')
+              }}
+              onToggleItem={(itemId) =>
+                setChecklistItems((current) =>
+                  current.map((item) =>
+                    item.id === itemId
+                      ? {
+                          ...item,
+                          completed: !item.completed,
+                        }
+                      : item,
+                  ),
+                )
+              }
+              sectionRef={checklistRef}
+              text={checklistText}
+              visibleItems={visibleChecklistItems}
+            />
 
             {assignedMembers.length > 0 && (
               <section className="mt-8 pl-9">
@@ -989,298 +733,59 @@ export function CardDetailDialog({
               </section>
             )}
 
-            {attachments.length > 0 && (
-              <section ref={attachmentsRef} className="mt-8 pl-9">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <Paperclip
-                      aria-hidden="true"
-                      className="size-5 text-muted-foreground"
-                    />
-                    <h3 className="text-base font-semibold">Attachments</h3>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isUploadingAttachment}
-                    onClick={() => attachmentInputRef.current?.click()}
-                  >
-                    {isUploadingAttachment ? 'Uploading...' : 'Add'}
-                  </Button>
-                </div>
-                <div className="mt-4 flex flex-col gap-2">
-                  {attachments.map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className="flex items-center gap-3 rounded-lg border bg-background/70 p-3"
-                    >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                        <Paperclip aria-hidden="true" className="size-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        {editingAttachmentId === attachment.id ? (
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <Input
-                              value={editingAttachmentName}
-                              onChange={(event) =>
-                                setEditingAttachmentName(event.target.value)
-                              }
-                              autoFocus
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() =>
-                                  void handleSaveAttachmentName(attachment.id)
-                                }
-                                disabled={!editingAttachmentName.trim()}
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingAttachmentId(null)
-                                  setEditingAttachmentName('')
-                                }}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="truncate text-sm font-medium">
-                              {attachment.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatFileSize(attachment.size)}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label={`Open ${attachment.name}`}
-                        onClick={() => void handleOpenAttachment(attachment)}
-                      >
-                        <ExternalLink aria-hidden="true" />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`${attachment.name} options`}
-                          >
-                            <MoreHorizontal aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              void handleOpenAttachment(attachment)
-                            }
-                          >
-                            <ExternalLink aria-hidden="true" />
-                            Open
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setEditingAttachmentId(attachment.id)
-                              setEditingAttachmentName(attachment.name)
-                            }}
-                          >
-                            <Edit3 aria-hidden="true" />
-                            Edit name
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() =>
-                              void handleDownloadAttachment(attachment)
-                            }
-                          >
-                            <Download aria-hidden="true" />
-                            Download
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={() =>
-                              void handleDeleteAttachment(attachment.id)
-                            }
-                          >
-                            <Trash2 aria-hidden="true" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            <CardDetailAttachments
+              attachments={attachments}
+              editingAttachmentId={editingAttachmentId}
+              editingAttachmentName={editingAttachmentName}
+              isUploading={isUploadingAttachment}
+              onDelete={(attachmentId) =>
+                void handleDeleteAttachment(attachmentId)
+              }
+              onDownload={(attachment) => void handleDownloadAttachment(attachment)}
+              onEditingNameChange={setEditingAttachmentName}
+              onOpen={(attachment) => void handleOpenAttachment(attachment)}
+              onPickFiles={() => attachmentInputRef.current?.click()}
+              onSaveName={(attachmentId) =>
+                void handleSaveAttachmentName(attachmentId)
+              }
+              onStartEdit={(attachment) => {
+                setEditingAttachmentId(attachment.id)
+                setEditingAttachmentName(attachment.name)
+              }}
+              onStopEdit={() => {
+                setEditingAttachmentId(null)
+                setEditingAttachmentName('')
+              }}
+              sectionRef={attachmentsRef}
+            />
           </section>
 
-          <aside className="min-h-0 overflow-y-auto border-t bg-muted/35 px-4 py-5 md:border-t-0 md:border-l">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare
-                  aria-hidden="true"
-                  className="size-4 text-muted-foreground"
-                />
-                <h3 className="font-semibold">Comments and activity</h3>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDetails((current) => !current)}
-              >
-                {showDetails ? 'Hide details' : 'Show details'}
-              </Button>
-            </div>
-
-            {showDetails && (
-              <div className="mt-4 rounded-lg border bg-background/70 p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Status</span>
-                  <span className="font-medium">
-                    {card.completed ? 'Complete' : 'Open'}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Comments</span>
-                  <span className="font-medium">{comments.length}</span>
-                </div>
-              </div>
-            )}
-
-            <form
-              className="mt-4 flex gap-2"
-              onSubmit={(event) => void handleAddComment(event)}
-            >
-              <Input
-                className="bg-background"
-                placeholder="Write a comment..."
-                value={commentText}
-                onChange={(event) => setCommentText(event.target.value)}
-              />
-              <Button
-                type="submit"
-                disabled={
-                  !commentText.trim() || createCommentMutation.isPending
-                }
-              >
-                {createCommentMutation.isPending ? 'Adding...' : 'Add'}
-              </Button>
-            </form>
-
-            <div className="mt-4 flex items-start gap-3 rounded-lg bg-background/60 p-3">
-              <Avatar className="bg-orange-500 text-white" size="sm">
-                <AvatarFallback>{activityAuthor.initials}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 text-sm">
-                <p>
-                  <span className="font-semibold">{activityAuthor.name}</span>{' '}
-                  added this card to the board
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">Just now</p>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-col gap-3">
-              {comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className="flex items-start gap-3 rounded-lg bg-background/70 p-3"
-                >
-                  <Avatar size="sm">
-                    <AvatarFallback>
-                      {getInitials(comment.authorName) || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold">{comment.authorName}</p>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label="Edit comment"
-                          onClick={() => {
-                            setEditingCommentId(comment.id)
-                            setEditingCommentText(comment.body)
-                          }}
-                        >
-                          <Pencil aria-hidden="true" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label="Remove comment"
-                          onClick={() => void handleDeleteComment(comment.id)}
-                          disabled={deleteCommentMutation.isPending}
-                        >
-                          <Trash2 aria-hidden="true" />
-                        </Button>
-                      </div>
-                    </div>
-                    {editingCommentId === comment.id ? (
-                      <div className="mt-2 flex flex-col gap-2">
-                        <Textarea
-                          value={editingCommentText}
-                          onChange={(event) =>
-                            setEditingCommentText(event.target.value)
-                          }
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => void handleSaveComment(comment.id)}
-                            disabled={
-                              !editingCommentText.trim() ||
-                              updateCommentMutation.isPending
-                            }
-                          >
-                            {updateCommentMutation.isPending
-                              ? 'Saving...'
-                              : 'Save'}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditingCommentId(null)
-                              setEditingCommentText('')
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="mt-1 whitespace-pre-wrap break-words">
-                        {comment.body}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(comment.updatedAt).toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </aside>
+          <CardDetailActivity
+            activityAuthor={activityAuthor}
+            card={card}
+            commentText={commentText}
+            comments={comments}
+            createCommentPending={createCommentMutation.isPending}
+            deleteCommentPending={deleteCommentMutation.isPending}
+            editingCommentId={editingCommentId}
+            editingCommentText={editingCommentText}
+            onAddComment={(event) => void handleAddComment(event)}
+            onCommentTextChange={setCommentText}
+            onDeleteComment={(commentId) => void handleDeleteComment(commentId)}
+            onEditingCommentTextChange={setEditingCommentText}
+            onSaveComment={(commentId) => void handleSaveComment(commentId)}
+            onShowDetailsChange={() => setShowDetails((current) => !current)}
+            onStartEditComment={(comment) => {
+              setEditingCommentId(comment.id)
+              setEditingCommentText(comment.body)
+            }}
+            onStopEditComment={() => {
+              setEditingCommentId(null)
+              setEditingCommentText('')
+            }}
+            showDetails={showDetails}
+            updateCommentPending={updateCommentMutation.isPending}
+          />
         </div>
       </DialogContent>
     </Dialog>

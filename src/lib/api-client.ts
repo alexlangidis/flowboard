@@ -1,4 +1,4 @@
-import { authClient } from './auth-client'
+import { getApiAuthHeaders } from './api-auth'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -30,20 +30,7 @@ async function request<TResponse, TBody = unknown>(
 ): Promise<TResponse> {
   const { body, headers, ...init } = options
   let response: Response
-  const session = await authClient.getSession()
-  const authHeaders: Record<string, string> = {}
-
-  if (session.data?.session.token) {
-    authHeaders.Authorization = `Bearer ${session.data.session.token}`
-  }
-
-  if (session.data?.user.email) {
-    authHeaders['X-Flowboard-User-Email'] = session.data.user.email
-  }
-
-  if (session.data?.user.name) {
-    authHeaders['X-Flowboard-User-Name'] = session.data.user.name
-  }
+  const authHeaders = await getApiAuthHeaders()
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
