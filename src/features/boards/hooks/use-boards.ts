@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import * as boardsApi from '../api/boards-api'
 import { moveCardInBoard } from '../lib/board-dnd'
-import type { BoardDetail } from '../types'
+import type { BoardCardComment, BoardDetail } from '../types'
 
 type BoardDetailResponse = {
   success: true
@@ -74,6 +74,88 @@ function removeListFromBoard(board: BoardDetail, listId: string) {
         ...list,
         position,
       })),
+  }
+}
+
+function moveListInBoard(
+  board: BoardDetail,
+  input: Parameters<typeof boardsApi.moveList>[0],
+) {
+  const lists = board.lists.filter((list) => list.id !== input.listId)
+  const movingList = board.lists.find((list) => list.id === input.listId)
+
+  if (!movingList) {
+    return board
+  }
+
+  const insertIndex = Math.max(0, Math.min(input.toIndex, lists.length))
+
+  lists.splice(insertIndex, 0, movingList)
+
+  return {
+    ...board,
+    lists: lists.map((list, position) => ({
+      ...list,
+      position,
+    })),
+  }
+}
+
+function addCommentToBoard(board: BoardDetail, comment: BoardCardComment) {
+  return {
+    ...board,
+    lists: board.lists.map((list) => ({
+      ...list,
+      cards: list.cards.map((card) =>
+        card.id === comment.cardId
+          ? {
+              ...card,
+              comments: [comment, ...(card.comments ?? [])],
+            }
+          : card,
+      ),
+    })),
+  }
+}
+
+function updateCommentInBoard(board: BoardDetail, comment: BoardCardComment) {
+  return {
+    ...board,
+    lists: board.lists.map((list) => ({
+      ...list,
+      cards: list.cards.map((card) =>
+        card.id === comment.cardId
+          ? {
+              ...card,
+              comments: (card.comments ?? []).map((cardComment) =>
+                cardComment.id === comment.id ? comment : cardComment,
+              ),
+            }
+          : card,
+      ),
+    })),
+  }
+}
+
+function removeCommentFromBoard(
+  board: BoardDetail,
+  input: { cardId: string; deletedCommentId: string },
+) {
+  return {
+    ...board,
+    lists: board.lists.map((list) => ({
+      ...list,
+      cards: list.cards.map((card) =>
+        card.id === input.cardId
+          ? {
+              ...card,
+              comments: (card.comments ?? []).filter(
+                (comment) => comment.id !== input.deletedCommentId,
+              ),
+            }
+          : card,
+      ),
+    })),
   }
 }
 
@@ -246,6 +328,45 @@ export function useDeleteListMutation(boardId: string) {
   })
 }
 
+export function useMoveListMutation(boardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: boardsApi.moveList,
+    onMutate: async (input) => {
+      const queryKey = boardQueryKey(boardId)
+
+      await queryClient.cancelQueries({ queryKey })
+
+      const previousBoardResponse =
+        queryClient.getQueryData<BoardDetailResponse>(queryKey)
+
+      if (previousBoardResponse) {
+        queryClient.setQueryData<BoardDetailResponse>(queryKey, {
+          ...previousBoardResponse,
+          data: {
+            board: moveListInBoard(previousBoardResponse.data.board, input),
+          },
+        })
+      }
+
+      return { previousBoardResponse }
+    },
+    onError: (_error, _input, context) => {
+      if (context?.previousBoardResponse) {
+        queryClient.setQueryData(
+          boardQueryKey(boardId),
+          context.previousBoardResponse,
+        )
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: boardsQueryKey })
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey(boardId) })
+    },
+  })
+}
+
 export function useCreateCardMutation(boardId: string) {
   const queryClient = useQueryClient()
 
@@ -404,6 +525,99 @@ export function useMoveCardMutation(boardId: string) {
         queryKey: boardQueryKey(boardId),
         refetchType: 'inactive',
       })
+    },
+  })
+}
+
+export function useCreateCardCommentMutation(boardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      cardId,
+      input,
+    }: {
+      cardId: string
+      input: Parameters<typeof boardsApi.createCardComment>[1]
+    }) => boardsApi.createCardComment(cardId, input),
+    onSuccess: (response) => {
+      const queryKey = boardQueryKey(boardId)
+      const currentBoardResponse =
+        queryClient.getQueryData<BoardDetailResponse>(queryKey)
+
+      if (currentBoardResponse) {
+        queryClient.setQueryData<BoardDetailResponse>(queryKey, {
+          ...currentBoardResponse,
+          data: {
+            board: addCommentToBoard(
+              currentBoardResponse.data.board,
+              response.data.comment,
+            ),
+          },
+        })
+      }
+
+      void queryClient.invalidateQueries({ queryKey: boardsQueryKey })
+    },
+  })
+}
+
+export function useUpdateCardCommentMutation(boardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      commentId,
+      input,
+    }: {
+      commentId: string
+      input: Parameters<typeof boardsApi.updateCardComment>[1]
+    }) => boardsApi.updateCardComment(commentId, input),
+    onSuccess: (response) => {
+      const queryKey = boardQueryKey(boardId)
+      const currentBoardResponse =
+        queryClient.getQueryData<BoardDetailResponse>(queryKey)
+
+      if (currentBoardResponse) {
+        queryClient.setQueryData<BoardDetailResponse>(queryKey, {
+          ...currentBoardResponse,
+          data: {
+            board: updateCommentInBoard(
+              currentBoardResponse.data.board,
+              response.data.comment,
+            ),
+          },
+        })
+      }
+
+      void queryClient.invalidateQueries({ queryKey: boardsQueryKey })
+    },
+  })
+}
+
+export function useDeleteCardCommentMutation(boardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: boardsApi.deleteCardComment,
+    onSuccess: (response) => {
+      const queryKey = boardQueryKey(boardId)
+      const currentBoardResponse =
+        queryClient.getQueryData<BoardDetailResponse>(queryKey)
+
+      if (currentBoardResponse) {
+        queryClient.setQueryData<BoardDetailResponse>(queryKey, {
+          ...currentBoardResponse,
+          data: {
+            board: removeCommentFromBoard(
+              currentBoardResponse.data.board,
+              response.data,
+            ),
+          },
+        })
+      }
+
+      void queryClient.invalidateQueries({ queryKey: boardsQueryKey })
     },
   })
 }

@@ -2,15 +2,21 @@ import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowRight,
+  CheckCircle2,
+  Columns3,
   Eye,
   EyeOff,
   KeyRound,
+  LayoutDashboard,
   Lock,
   Mail,
+  MessageSquare,
+  Sparkles,
   User,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { PublicNav } from '@/components/layout/public-nav'
 import {
   Card,
   CardContent,
@@ -34,6 +40,11 @@ type EmailOtpAuthClient = {
     verifyEmail: (input: { email: string; otp: string }) => Promise<AuthResult>
   }
 }
+
+const demoCredentials = {
+  email: 'demo@flowboard.app',
+  password: 'demo-password',
+} as const
 
 function getErrorMessage(result: AuthResult, fallback: string) {
   return result.error?.message ?? fallback
@@ -59,20 +70,128 @@ function AuthShell({
   footer: ReactNode
 }) {
   return (
-    <section className="flex min-h-[calc(100svh-3.5rem)] items-center justify-center px-4 py-10">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent>{children}</CardContent>
-        <CardFooter className="justify-center text-sm text-muted-foreground">
-          {footer}
-        </CardFooter>
-      </Card>
-    </section>
+    <>
+      <PublicNav />
+      <section className="grid min-h-[calc(100svh-4rem)] items-center gap-8 py-8 lg:grid-cols-[1fr_25rem] lg:py-12">
+        <div className="hidden min-w-0 flex-col gap-6 lg:flex">
+          <div className="max-w-xl">
+            <div className="flex w-fit items-center gap-2 rounded-full border bg-background px-3 py-1 text-sm text-muted-foreground">
+              <Sparkles aria-hidden="true" className="size-4" />
+              Built for focused project work
+            </div>
+            <h1 className="mt-5 max-w-2xl text-4xl font-semibold tracking-tight text-balance">
+              Turn scattered tasks into clear visual boards.
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">
+              Sign in to manage workspaces, boards, lists, and cards from one
+              quiet workspace built for day-to-day execution.
+            </p>
+          </div>
+
+          <div className="grid max-w-xl gap-3 sm:grid-cols-3">
+            {authBenefits.map((benefit) => (
+              <div
+                key={benefit.label}
+                className="rounded-xl border bg-background p-3 shadow-sm"
+              >
+                <benefit.icon
+                  aria-hidden="true"
+                  className="size-4 text-muted-foreground"
+                />
+                <p className="mt-3 text-sm font-medium">{benefit.label}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {benefit.description}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="max-w-xl rounded-2xl border bg-background p-4 shadow-2xl shadow-foreground/10">
+            <div className="flex items-center justify-between gap-3 border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <LayoutDashboard aria-hidden="true" className="size-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Launch board</p>
+                  <p className="text-xs text-muted-foreground">
+                    Product workspace
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                5 cards
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {authPreviewLists.map((list) => (
+                <div
+                  key={list.title}
+                  className="rounded-xl bg-muted/60 p-3 ring-1 ring-border"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-xs font-semibold">
+                      {list.title}
+                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      {list.cards.length}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {list.cards.map((card) => (
+                      <div
+                        key={card}
+                        className="rounded-lg bg-background p-2 text-xs font-medium shadow-sm ring-1 ring-border"
+                      >
+                        <span className="mb-2 block h-1 w-10 rounded-full bg-primary/70" />
+                        {card}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <Card className="mx-auto w-full max-w-sm shadow-xl shadow-foreground/5 lg:mx-0">
+          <CardHeader>
+            <CardTitle>{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </CardHeader>
+          <CardContent>{children}</CardContent>
+          <CardFooter className="justify-center text-sm text-muted-foreground">
+            {footer}
+          </CardFooter>
+        </Card>
+      </section>
+    </>
   )
 }
+
+const authBenefits = [
+  {
+    label: 'Boards',
+    description: 'Group project work into focused spaces.',
+    icon: Columns3,
+  },
+  {
+    label: 'Cards',
+    description: 'Track tasks from idea to done.',
+    icon: CheckCircle2,
+  },
+  {
+    label: 'Updates',
+    description: 'Keep context visible while work moves.',
+    icon: MessageSquare,
+  },
+]
+
+const authPreviewLists = [
+  { title: 'Plan', cards: ['Scope release', 'Write checklist'] },
+  { title: 'Doing', cards: ['Review board flow', 'Ship auth'] },
+  { title: 'Done', cards: ['Create workspace'] },
+]
 
 function StatusMessage({
   tone,
@@ -275,6 +394,33 @@ export function SignInForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const canVerifyEmail = shouldOfferVerification(error)
 
+  async function signInWithCredentials(
+    nextEmail: string,
+    nextPassword: string,
+  ) {
+    setError(null)
+    setSuccess(null)
+    setIsSubmitting(true)
+
+    try {
+      const result = await authClient.signIn.email({
+        email: nextEmail,
+        password: nextPassword,
+      })
+
+      if (result.error) {
+        setError(getErrorMessage(result, 'Unable to sign in.'))
+        return
+      }
+
+      await navigate({ to: '/dashboard' })
+    } catch (error) {
+      setError(getCaughtErrorMessage(error, 'Unable to sign in.'))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   async function signInAfterVerification() {
     setError(null)
     const result = await authClient.signIn.email({
@@ -292,27 +438,13 @@ export function SignInForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError(null)
-    setSuccess(null)
-    setIsSubmitting(true)
+    await signInWithCredentials(email, password)
+  }
 
-    try {
-      const result = await authClient.signIn.email({
-        email,
-        password,
-      })
-
-      if (result.error) {
-        setError(getErrorMessage(result, 'Unable to sign in.'))
-        return
-      }
-
-      await navigate({ to: '/dashboard' })
-    } catch (error) {
-      setError(getCaughtErrorMessage(error, 'Unable to sign in.'))
-    } finally {
-      setIsSubmitting(false)
-    }
+  async function handleDemoSignIn() {
+    setEmail(demoCredentials.email)
+    setPassword(demoCredentials.password)
+    await signInWithCredentials(demoCredentials.email, demoCredentials.password)
   }
 
   return (
@@ -372,6 +504,25 @@ export function SignInForm() {
           {isSubmitting ? 'Signing in' : 'Sign in'}
           <ArrowRight />
         </Button>
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Demo account</p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {demoCredentials.email}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleDemoSignIn()}
+              disabled={isSubmitting}
+            >
+              Use demo
+            </Button>
+          </div>
+        </div>
         {shouldOfferVerification(error) ? (
           <ResendVerificationButton
             email={email}

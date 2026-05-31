@@ -24,6 +24,11 @@ const updateListSchema = z.object({
   name: z.string().min(1).max(80),
 })
 
+const moveListSchema = z.object({
+  listId: z.string().uuid(),
+  toIndex: z.number().int().min(0),
+})
+
 async function getAccessibleList(
   db: ReturnType<typeof createDb>,
   listId: string,
@@ -123,6 +128,64 @@ export const listRoutes = new Hono<AppEnv>()
       },
       201,
     )
+  })
+  .patch('/move', async (c) => {
+    const user = await getCurrentUser(c)
+
+    if (!user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const db = createDb(c.env)
+    const input = await parseJsonBody(c.req.raw, moveListSchema)
+    const movingList = await getAccessibleList(db, input.listId, user.id)
+
+    if (!movingList) {
+      return c.json({ success: false, error: 'List not found' }, 404)
+    }
+
+    const boardLists = await db
+      .select({
+        id: lists.id,
+        boardId: lists.boardId,
+        name: lists.name,
+        position: lists.position,
+      })
+      .from(lists)
+      .where(eq(lists.boardId, movingList.boardId))
+      .orderBy(lists.position)
+    const nextLists = boardLists.filter((list) => list.id !== input.listId)
+    const insertIndex = Math.max(0, Math.min(input.toIndex, nextLists.length))
+
+    nextLists.splice(insertIndex, 0, movingList)
+
+    await Promise.all(
+      nextLists.map((list, position) =>
+        db
+          .update(lists)
+          .set({
+            position,
+            updatedAt: new Date(),
+          })
+          .where(eq(lists.id, list.id)),
+      ),
+    )
+
+    await db
+      .update(boards)
+      .set({ updatedAt: new Date() })
+      .where(eq(boards.id, movingList.boardId))
+
+    return c.json({
+      success: true,
+      data: {
+        list: {
+          ...movingList,
+          position: insertIndex,
+          cards: [],
+        },
+      },
+    })
   })
   .patch('/:listId', async (c) => {
     const user = await getCurrentUser(c)

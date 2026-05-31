@@ -9,6 +9,7 @@ import {
   cards,
   comments,
   lists,
+  users,
   workspaceMembers,
 } from '../db/schema'
 import { getCurrentUser } from '../lib/auth'
@@ -32,6 +33,30 @@ const updateCardSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   completed: z.boolean().optional(),
 })
+
+const createCommentSchema = z.object({
+  body: z.string().min(1).max(1000),
+})
+
+const updateCommentSchema = z.object({
+  body: z.string().min(1).max(1000),
+})
+
+function serializeComment(comment: {
+  id: string
+  cardId: string
+  authorId: string
+  authorName: string
+  body: string
+  createdAt: Date
+  updatedAt: Date
+}) {
+  return {
+    ...comment,
+    createdAt: comment.createdAt.toISOString(),
+    updatedAt: comment.updatedAt.toISOString(),
+  }
+}
 
 async function getAccessibleList(
   db: ReturnType<typeof createDb>,
@@ -87,6 +112,40 @@ async function getAccessibleCard(
     .limit(1)
 
   return card
+}
+
+async function getAccessibleComment(
+  db: ReturnType<typeof createDb>,
+  commentId: string,
+  userId: string,
+) {
+  const [comment] = await db
+    .select({
+      id: comments.id,
+      cardId: comments.cardId,
+      authorId: comments.authorId,
+      authorName: users.name,
+      body: comments.body,
+      createdAt: comments.createdAt,
+      updatedAt: comments.updatedAt,
+      boardId: lists.boardId,
+    })
+    .from(comments)
+    .innerJoin(cards, eq(cards.id, comments.cardId))
+    .innerJoin(lists, eq(lists.id, cards.listId))
+    .innerJoin(boards, eq(boards.id, lists.boardId))
+    .innerJoin(users, eq(users.id, comments.authorId))
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.workspaceId, boards.workspaceId),
+        eq(workspaceMembers.userId, userId),
+      ),
+    )
+    .where(eq(comments.id, commentId))
+    .limit(1)
+
+  return comment
 }
 
 export const cardRoutes = new Hono<AppEnv>()
@@ -270,6 +329,140 @@ export const cardRoutes = new Hono<AppEnv>()
       success: true,
       data: {
         card: updatedCard,
+      },
+    })
+  })
+  .post('/:cardId/comments', async (c) => {
+    const user = await getCurrentUser(c)
+
+    if (!user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const db = createDb(c.env)
+    const cardId = c.req.param('cardId')
+    const card = await getAccessibleCard(db, cardId, user.id)
+
+    if (!card) {
+      return c.json({ success: false, error: 'Card not found' }, 404)
+    }
+
+    const input = await parseJsonBody(c.req.raw, createCommentSchema)
+    const [comment] = await db
+      .insert(comments)
+      .values({
+        cardId,
+        authorId: user.id,
+        body: input.body,
+      })
+      .returning({
+        id: comments.id,
+        cardId: comments.cardId,
+        authorId: comments.authorId,
+        body: comments.body,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+      })
+
+    await db
+      .update(boards)
+      .set({ updatedAt: new Date() })
+      .where(eq(boards.id, card.boardId))
+
+    return c.json(
+      {
+        success: true,
+        data: {
+          comment: serializeComment({
+            ...comment,
+            authorName: user.name,
+          }),
+        },
+      },
+      201,
+    )
+  })
+  .patch('/comments/:commentId', async (c) => {
+    const user = await getCurrentUser(c)
+
+    if (!user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const db = createDb(c.env)
+    const commentId = c.req.param('commentId')
+    const existingComment = await getAccessibleComment(db, commentId, user.id)
+
+    if (!existingComment) {
+      return c.json({ success: false, error: 'Comment not found' }, 404)
+    }
+
+    if (existingComment.authorId !== user.id) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const input = await parseJsonBody(c.req.raw, updateCommentSchema)
+    const [comment] = await db
+      .update(comments)
+      .set({
+        body: input.body,
+        updatedAt: new Date(),
+      })
+      .where(eq(comments.id, commentId))
+      .returning({
+        id: comments.id,
+        cardId: comments.cardId,
+        authorId: comments.authorId,
+        body: comments.body,
+        createdAt: comments.createdAt,
+        updatedAt: comments.updatedAt,
+      })
+
+    await db
+      .update(boards)
+      .set({ updatedAt: new Date() })
+      .where(eq(boards.id, existingComment.boardId))
+
+    return c.json({
+      success: true,
+      data: {
+        comment: serializeComment({
+          ...comment,
+          authorName: existingComment.authorName,
+        }),
+      },
+    })
+  })
+  .delete('/comments/:commentId', async (c) => {
+    const user = await getCurrentUser(c)
+
+    if (!user) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const db = createDb(c.env)
+    const commentId = c.req.param('commentId')
+    const comment = await getAccessibleComment(db, commentId, user.id)
+
+    if (!comment) {
+      return c.json({ success: false, error: 'Comment not found' }, 404)
+    }
+
+    if (comment.authorId !== user.id) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    await db.delete(comments).where(eq(comments.id, commentId))
+    await db
+      .update(boards)
+      .set({ updatedAt: new Date() })
+      .where(eq(boards.id, comment.boardId))
+
+    return c.json({
+      success: true,
+      data: {
+        deletedCommentId: commentId,
+        cardId: comment.cardId,
       },
     })
   })

@@ -15,39 +15,52 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import {
+  ArrowLeft,
+  ArrowRight,
+  AlignLeft,
+  Bookmark,
+  Bug,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleDot,
+  ClipboardList,
   Copy,
+  Download,
   Edit3,
+  ExternalLink,
   Eye,
   EyeOff,
-  FolderPlus,
+  Flag,
+  Flame,
   GripVertical,
   Layers,
   LayoutGrid,
   MessageSquare,
   MoreHorizontal,
+  Paperclip,
   Palette,
   PanelTop,
   Pencil,
   Plus,
-  PlusCircle,
   RefreshCw,
+  Rocket,
   Search,
   Settings,
   Square,
   SquareCheckBig,
   Star,
+  Target,
   Trash2,
   Users,
+  X,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
-import type { FormEvent } from 'react'
+import type { FormEvent, RefObject } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -78,12 +91,16 @@ import { EditBoardDialog } from '@/features/boards/components/edit-board-dialog'
 import {
   useBoardQuery,
   useCreateCardMutation,
+  useCreateCardCommentMutation,
   useCreateListMutation,
+  useDeleteCardCommentMutation,
   useDeleteCardMutation,
   useDeleteListMutation,
   useMoveCardMutation,
+  useMoveListMutation,
   useToggleBoardStarMutation,
   useUpdateCardMutation,
+  useUpdateCardCommentMutation,
   useUpdateListMutation,
 } from '@/features/boards/hooks/use-boards'
 import type {
@@ -121,6 +138,13 @@ type BoardTheme = {
 type ListColor = {
   bar: string
   icon: string
+  name: string
+  swatch: string
+}
+
+type ListIcon = {
+  icon: typeof CircleDot
+  name: string
 }
 
 type CardColor = {
@@ -128,30 +152,50 @@ type CardColor = {
   mutedBar: string
 }
 
+type ChecklistItem = {
+  id: string
+  completed: boolean
+  text: string
+}
+
+type CardAttachmentItem = {
+  file: File
+  id: string
+  name: string
+  size: number
+  url: string
+}
+
 const boardThemes: BoardTheme[] = [
   {
     name: 'Sky',
     canvas:
-      'bg-[radial-gradient(circle_at_top_left,_oklch(0.83_0.11_231),_transparent_34rem),linear-gradient(135deg,_oklch(0.74_0.12_234),_oklch(0.58_0.13_258))]',
+      'bg-[radial-gradient(circle_at_12%_8%,_rgba(255,255,255,0.72),_transparent_28rem),radial-gradient(circle_at_82%_16%,_oklch(0.80_0.11_224_/_0.92),_transparent_30rem),linear-gradient(135deg,_oklch(0.78_0.11_222),_oklch(0.59_0.15_252))]',
     swatch: 'bg-sky-500',
   },
   {
-    name: 'Violet',
+    name: 'Aurora',
     canvas:
-      'bg-[radial-gradient(circle_at_top_left,_oklch(0.80_0.12_310),_transparent_34rem),linear-gradient(135deg,_oklch(0.67_0.16_294),_oklch(0.53_0.18_281))]',
+      'bg-[radial-gradient(circle_at_14%_10%,_oklch(0.88_0.10_330_/_0.86),_transparent_28rem),radial-gradient(circle_at_78%_18%,_oklch(0.79_0.14_178_/_0.78),_transparent_30rem),linear-gradient(135deg,_oklch(0.68_0.16_292),_oklch(0.55_0.16_240))]',
     swatch: 'bg-violet-500',
   },
   {
     name: 'Lagoon',
     canvas:
-      'bg-[radial-gradient(circle_at_top_left,_oklch(0.82_0.13_174),_transparent_34rem),linear-gradient(135deg,_oklch(0.69_0.13_181),_oklch(0.50_0.12_210))]',
+      'bg-[radial-gradient(circle_at_12%_8%,_oklch(0.90_0.08_175_/_0.82),_transparent_28rem),radial-gradient(circle_at_84%_18%,_oklch(0.72_0.13_190_/_0.78),_transparent_30rem),linear-gradient(135deg,_oklch(0.70_0.13_181),_oklch(0.50_0.12_210))]',
     swatch: 'bg-teal-500',
   },
   {
     name: 'Coral',
     canvas:
-      'bg-[radial-gradient(circle_at_top_left,_oklch(0.83_0.13_53),_transparent_34rem),linear-gradient(135deg,_oklch(0.73_0.16_42),_oklch(0.58_0.16_22))]',
+      'bg-[radial-gradient(circle_at_14%_8%,_oklch(0.91_0.10_70_/_0.86),_transparent_28rem),radial-gradient(circle_at_80%_18%,_oklch(0.77_0.15_22_/_0.75),_transparent_30rem),linear-gradient(135deg,_oklch(0.73_0.16_42),_oklch(0.57_0.16_18))]',
     swatch: 'bg-orange-500',
+  },
+  {
+    name: 'Slate',
+    canvas:
+      'bg-[radial-gradient(circle_at_12%_8%,_oklch(0.80_0.05_245_/_0.56),_transparent_28rem),radial-gradient(circle_at_82%_12%,_oklch(0.62_0.10_225_/_0.62),_transparent_30rem),linear-gradient(135deg,_oklch(0.45_0.07_250),_oklch(0.33_0.05_260))]',
+    swatch: 'bg-slate-600',
   },
 ]
 
@@ -159,23 +203,48 @@ const listColors: ListColor[] = [
   {
     bar: 'bg-sky-500',
     icon: 'bg-sky-100 text-sky-700',
+    name: 'Sky',
+    swatch: 'bg-sky-500',
   },
   {
     bar: 'bg-violet-500',
     icon: 'bg-violet-100 text-violet-700',
+    name: 'Violet',
+    swatch: 'bg-violet-500',
   },
   {
     bar: 'bg-emerald-500',
     icon: 'bg-emerald-100 text-emerald-700',
+    name: 'Emerald',
+    swatch: 'bg-emerald-500',
   },
   {
     bar: 'bg-amber-500',
     icon: 'bg-amber-100 text-amber-700',
+    name: 'Amber',
+    swatch: 'bg-amber-500',
   },
   {
     bar: 'bg-rose-500',
     icon: 'bg-rose-100 text-rose-700',
+    name: 'Rose',
+    swatch: 'bg-rose-500',
   },
+]
+
+const listIcons: ListIcon[] = [
+  { name: 'Circle', icon: CircleDot },
+  { name: 'Board', icon: LayoutGrid },
+  { name: 'Panel', icon: PanelTop },
+  { name: 'Done', icon: CheckCircle2 },
+  { name: 'Square', icon: Square },
+  { name: 'Tasks', icon: ClipboardList },
+  { name: 'Flag', icon: Flag },
+  { name: 'Rocket', icon: Rocket },
+  { name: 'Target', icon: Target },
+  { name: 'Flame', icon: Flame },
+  { name: 'Bug', icon: Bug },
+  { name: 'Bookmark', icon: Bookmark },
 ]
 
 const cardColors: CardColor[] = [
@@ -207,8 +276,10 @@ function BoardPage() {
   const board = boardQuery.data?.data.board
   const toggleStarMutation = useToggleBoardStarMutation(boardId)
   const moveCardMutation = useMoveCardMutation(boardId)
+  const moveListMutation = useMoveListMutation(boardId)
   const [activeCard, setActiveCard] = useState<BoardCard | null>(null)
   const [query, setQuery] = useState('')
+  const [themeIndex, setThemeIndex] = useState(0)
   const [compactCards, setCompactCards] = useState(false)
   const [hideCompletedCards, setHideCompletedCards] = useState(false)
   const [collapsedListIds, setCollapsedListIds] = useState<Set<string>>(
@@ -217,6 +288,10 @@ function BoardPage() {
   const [cardColorById, setCardColorById] = useState<Record<string, CardColor>>(
     {},
   )
+  const [listColorById, setListColorById] = useState<Record<string, ListColor>>(
+    {},
+  )
+  const [listIconById, setListIconById] = useState<Record<string, ListIcon>>({})
   const [watchedCardIds, setWatchedCardIds] = useState<Set<string>>(
     () => new Set(),
   )
@@ -251,7 +326,7 @@ function BoardPage() {
     (total, list) => total + list.cards.length,
     0,
   )
-  const boardTheme = boardThemes[0]
+  const boardTheme = boardThemes[themeIndex]
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -337,6 +412,30 @@ function BoardPage() {
     }))
   }
 
+  function handleSetListColor(listId: string, color: ListColor) {
+    setListColorById((current) => ({
+      ...current,
+      [listId]: color,
+    }))
+  }
+
+  function handleSetListIcon(listId: string, icon: ListIcon) {
+    setListIconById((current) => ({
+      ...current,
+      [listId]: icon,
+    }))
+  }
+
+  async function handleMoveList(listId: string, toIndex: number) {
+    try {
+      await moveListMutation.mutateAsync({ listId, toIndex })
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to move list.',
+      )
+    }
+  }
+
   function handleToggleWatchedCard(cardId: string) {
     setWatchedCardIds((current) => {
       const next = new Set(current)
@@ -365,9 +464,10 @@ function BoardPage() {
 
   return (
     <div
-      className={`flex h-full flex-col overflow-hidden ${boardTheme.canvas}`}
+      className={`relative flex h-full flex-col overflow-hidden ${boardTheme.canvas}`}
     >
-      <div className="border-b border-white/20 bg-background/85 px-4 py-3 shadow-sm backdrop-blur-xl">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,_rgba(255,255,255,0.22),_transparent_34%,_rgba(255,255,255,0.10)_65%,_transparent)]" />
+      <div className="relative z-10 border-b border-white/35 bg-white/45 px-4 py-3 shadow-lg shadow-foreground/10 backdrop-blur-2xl dark:bg-background/45">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -378,7 +478,7 @@ function BoardPage() {
               <span>{board?.workspaceName ?? 'Workspace'}</span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                 {board?.name ?? 'Loading board'}
               </h1>
               <Button
@@ -400,12 +500,20 @@ function BoardPage() {
               </Button>
               {board && (
                 <>
-                  <Badge variant="secondary">{board.visibility}</Badge>
-                  <Badge variant="outline">
+                  <Badge className="border-white/55 bg-white/55 text-foreground shadow-sm backdrop-blur-xl">
+                    {board.visibility}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="border-white/55 bg-white/35 text-foreground shadow-sm backdrop-blur-xl"
+                  >
                     {board.lists.length}{' '}
                     {board.lists.length === 1 ? 'list' : 'lists'}
                   </Badge>
-                  <Badge variant="outline">
+                  <Badge
+                    variant="outline"
+                    className="border-white/55 bg-white/35 text-foreground shadow-sm backdrop-blur-xl"
+                  >
                     {totalCards} {totalCards === 1 ? 'card' : 'cards'}
                   </Badge>
                 </>
@@ -425,7 +533,7 @@ function BoardPage() {
                 className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
               />
               <Input
-                className="h-8 bg-background/80 pl-8"
+                className="h-8 border-white/50 bg-white/65 pl-8 shadow-sm backdrop-blur-xl dark:bg-background/65"
                 placeholder="Filter cards"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -442,12 +550,14 @@ function BoardPage() {
                       localBoard.lists.length > 0
                     : false
                 }
+                themeIndex={themeIndex}
                 totalCards={totalCards}
                 visibleCards={visibleCards}
                 onCollapseAll={handleCollapseAllLists}
                 onExpandAll={handleExpandAllLists}
                 onSetCompactCards={setCompactCards}
                 onSetHideCompletedCards={setHideCompletedCards}
+                onSetThemeIndex={setThemeIndex}
                 onRefresh={() => void boardQuery.refetch()}
                 onToggleStar={() => void handleToggleStar(board)}
                 toggleStarPending={toggleStarMutation.isPending}
@@ -456,13 +566,21 @@ function BoardPage() {
             {board && (
               <>
                 <EditBoardDialog board={board}>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/55 bg-white/55 shadow-sm backdrop-blur-xl hover:bg-white/75 dark:bg-background/55"
+                  >
                     <Pencil data-icon="inline-start" />
                     Edit
                   </Button>
                 </EditBoardDialog>
                 <DeleteBoardDialog board={board} navigateToDashboard>
-                  <Button variant="destructive" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-red-300/60 bg-red-500/10 text-red-700 shadow-sm backdrop-blur-xl hover:bg-red-500/15 hover:text-red-800 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-300 dark:hover:bg-red-500/20"
+                  >
                     <Trash2 data-icon="inline-start" />
                     Delete
                   </Button>
@@ -473,16 +591,23 @@ function BoardPage() {
         </div>
         {board && (
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            <Button variant="secondary" size="sm">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="border border-white/55 bg-white/60 shadow-sm backdrop-blur-xl hover:bg-white/80 dark:bg-background/60"
+            >
               <LayoutGrid data-icon="inline-start" />
               Board
             </Button>
-            <Badge variant="secondary">
+            <Badge className="border-white/55 bg-white/45 text-foreground shadow-sm backdrop-blur-xl">
               {normalizedQuery
                 ? `${visibleCards} matching ${visibleCards === 1 ? 'card' : 'cards'}`
                 : 'All cards visible'}
             </Badge>
-            <Badge variant="outline">
+            <Badge
+              variant="outline"
+              className="border-white/55 bg-white/35 text-foreground shadow-sm backdrop-blur-xl"
+            >
               <CalendarDays aria-hidden="true" />
               Updated {new Date(board.updatedAt).toLocaleDateString()}
             </Badge>
@@ -491,24 +616,24 @@ function BoardPage() {
       </div>
 
       {boardQuery.isLoading ? (
-        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto p-4 md:p-5">
+        <div className="relative z-10 flex min-h-0 flex-1 gap-4 overflow-x-auto p-4 md:p-5">
           {Array.from({ length: 3 }).map((_, index) => (
             <section
               key={index}
-              className="flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-background p-3 shadow-sm ring-1 ring-border"
+              className="flex max-h-full w-72 shrink-0 flex-col rounded-2xl border border-white/45 bg-white/40 p-3 shadow-xl shadow-foreground/10 backdrop-blur-2xl"
             >
-              <div className="h-5 w-32 rounded bg-background/80" />
+              <div className="h-5 w-32 rounded bg-white/55" />
               <Separator className="my-3" />
               <div className="flex flex-col gap-2">
-                <div className="h-24 rounded-lg bg-background/80" />
-                <div className="h-16 rounded-lg bg-background/80" />
+                <div className="h-24 rounded-lg bg-white/55" />
+                <div className="h-16 rounded-lg bg-white/55" />
               </div>
             </section>
           ))}
         </div>
       ) : boardQuery.isError || !localBoard ? (
-        <div className="flex flex-1 items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-lg border bg-card p-6 text-center shadow-sm">
+        <div className="relative z-10 flex flex-1 items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/45 bg-white/65 p-6 text-center shadow-xl shadow-foreground/10 backdrop-blur-2xl">
             <h2 className="text-lg font-semibold">Unable to load board</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               This board may not exist, or you may not have access to it.
@@ -531,28 +656,41 @@ function BoardPage() {
           onDragStart={(event) => void handleDragStart(event)}
           onDragEnd={(event) => void handleDragEnd(event)}
         >
-          <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto p-4 md:p-5">
+          <div className="relative z-10 flex min-h-0 flex-1 gap-4 overflow-x-auto p-4 md:p-5">
             {visibleLists.map((list, index) => (
               <BoardListSection
                 key={list.id}
                 boardId={localBoard.id}
+                listCount={visibleLists.length}
+                listIndex={index}
                 list={list}
-                color={listColors[index % listColors.length]}
+                color={
+                  listColorById[list.id] ??
+                  listColors[index % listColors.length]
+                }
                 cardColorById={cardColorById}
                 compactCards={compactCards}
+                icon={listIconById[list.id] ?? listIcons[0]}
                 isCollapsed={collapsedListIds.has(list.id)}
                 isFiltering={Boolean(normalizedQuery)}
+                isMovingList={moveListMutation.isPending}
                 watchedCardIds={watchedCardIds}
                 onSetCardColor={handleSetCardColor}
+                onSetListColor={handleSetListColor}
+                onSetListIcon={handleSetListIcon}
+                onMoveList={handleMoveList}
                 onToggleCollapsed={() => handleToggleList(list.id)}
                 onToggleWatchedCard={handleToggleWatchedCard}
               />
             ))}
 
             {localBoard.lists.length === 0 && (
-              <section className="flex w-72 shrink-0 flex-col rounded-xl border border-dashed bg-background p-4 text-sm text-muted-foreground shadow-sm">
-                <p className="font-medium text-foreground">No lists yet</p>
-                <p className="mt-1">
+              <section className="flex w-72 shrink-0 flex-col rounded-2xl border border-dashed border-white/65 bg-white/50 p-4 text-sm text-muted-foreground shadow-xl shadow-foreground/10 backdrop-blur-2xl dark:bg-background/50">
+                <span className="mb-3 flex size-9 items-center justify-center rounded-xl bg-white/65 text-foreground shadow-sm">
+                  <PanelTop aria-hidden="true" className="size-4" />
+                </span>
+                <p className="font-semibold text-foreground">No lists yet</p>
+                <p className="mt-1 leading-6">
                   Create your first list to start adding cards.
                 </p>
               </section>
@@ -579,6 +717,7 @@ function BoardSettingsMenu({
   compactCards,
   hideCompletedCards,
   isAllCollapsed,
+  themeIndex,
   totalCards,
   visibleCards,
   toggleStarPending,
@@ -587,12 +726,14 @@ function BoardSettingsMenu({
   onRefresh,
   onSetCompactCards,
   onSetHideCompletedCards,
+  onSetThemeIndex,
   onToggleStar,
 }: {
   board: BoardDetail
   compactCards: boolean
   hideCompletedCards: boolean
   isAllCollapsed: boolean
+  themeIndex: number
   totalCards: number
   visibleCards: number
   toggleStarPending: boolean
@@ -601,6 +742,7 @@ function BoardSettingsMenu({
   onRefresh: () => void
   onSetCompactCards: (compact: boolean) => void
   onSetHideCompletedCards: (hideCompleted: boolean) => void
+  onSetThemeIndex: (themeIndex: number) => void
   onToggleStar: () => void
 }) {
   const completedCards = board.lists.reduce(
@@ -675,6 +817,30 @@ function BoardSettingsMenu({
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        <DropdownMenuLabel className="flex items-center gap-2">
+          <Palette aria-hidden="true" className="size-4" />
+          Board color
+        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          {boardThemes.map((theme, index) => (
+            <DropdownMenuItem
+              key={theme.name}
+              onSelect={() => onSetThemeIndex(index)}
+            >
+              <span
+                className={`size-3 rounded-full shadow-sm ring-1 ring-black/10 ${theme.swatch}`}
+                aria-hidden="true"
+              />
+              {theme.name}
+              {themeIndex === index && (
+                <Badge className="ml-auto" variant="secondary">
+                  Active
+                </Badge>
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
         <div className="grid grid-cols-2 gap-2 p-1">
           <BoardMenuStat label="Cards" value={visibleCards} />
           <BoardMenuStat label="Done" value={completedCards} />
@@ -719,11 +885,18 @@ function BoardListSection({
   cardColorById,
   compactCards,
   color,
+  icon,
   isCollapsed,
   isFiltering,
+  isMovingList,
   list,
+  listCount,
+  listIndex,
   watchedCardIds,
+  onMoveList,
   onSetCardColor,
+  onSetListColor,
+  onSetListIcon,
   onToggleCollapsed,
   onToggleWatchedCard,
 }: {
@@ -731,20 +904,29 @@ function BoardListSection({
   cardColorById: Record<string, CardColor>
   compactCards: boolean
   color: ListColor
+  icon: ListIcon
   isCollapsed: boolean
   isFiltering: boolean
+  isMovingList: boolean
   list: BoardListWithCards
+  listCount: number
+  listIndex: number
   watchedCardIds: Set<string>
+  onMoveList: (listId: string, toIndex: number) => Promise<void> | void
   onSetCardColor: (cardId: string, color: CardColor) => void
+  onSetListColor: (listId: string, color: ListColor) => void
+  onSetListIcon: (listId: string, icon: ListIcon) => void
   onToggleCollapsed: () => void
   onToggleWatchedCard: (cardId: string) => void
 }) {
+  const Icon = icon.icon
   const createCardMutation = useCreateCardMutation(boardId)
   const createListMutation = useCreateListMutation(boardId)
   const deleteCardMutation = useDeleteCardMutation(boardId)
   const deleteListMutation = useDeleteListMutation(boardId)
   const updateListMutation = useUpdateListMutation(boardId)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [iconOpen, setIconOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const { setNodeRef, isOver } = useDroppable({
     id: list.id,
@@ -808,17 +990,17 @@ function BoardListSection({
       ref={setNodeRef}
       className={
         isOver
-          ? 'flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-xl bg-background/95 shadow-xl ring-2 ring-ring'
-          : 'flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-xl bg-background/95 shadow-lg shadow-foreground/5 ring-1 ring-white/70'
+          ? 'flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/70 shadow-2xl shadow-foreground/15 ring-2 ring-white/80 backdrop-blur-2xl dark:bg-background/60'
+          : 'flex max-h-full w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/45 bg-white/55 shadow-xl shadow-foreground/10 backdrop-blur-2xl transition-all hover:bg-white/65 dark:bg-background/55'
       }
     >
       <div className={`h-2 ${color.bar}`} />
-      <div className="flex items-center justify-between gap-3 border-b bg-background/80 px-3 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-white/45 bg-white/40 px-3 py-3 backdrop-blur-xl dark:bg-background/40">
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={`flex size-6 items-center justify-center rounded-md ${color.icon}`}
           >
-            <CircleDot aria-hidden="true" className="size-3.5" />
+            <Icon aria-hidden="true" className="size-3.5" />
           </span>
           <h2 className="truncate text-sm font-semibold">{list.name}</h2>
           <Badge variant="outline">{list.cards.length}</Badge>
@@ -860,6 +1042,9 @@ function BoardListSection({
                   <ChevronsDownUp aria-hidden="true" />
                 )}
                 {isCollapsed ? 'Expand list' : 'Collapse list'}
+                {isCollapsed && (
+                  <Check aria-hidden="true" className="ml-auto" />
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void handleCopyListTitle()}>
                 <Copy aria-hidden="true" />
@@ -886,10 +1071,50 @@ function BoardListSection({
                 <CheckCircle2 aria-hidden="true" />
                 Clear completed cards
               </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <FolderPlus aria-hidden="true" />
-                Move list
+              <DropdownMenuItem
+                disabled={listIndex === 0 || isMovingList}
+                onSelect={() => void onMoveList(list.id, listIndex - 1)}
+              >
+                <ArrowLeft aria-hidden="true" />
+                Move left
               </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={listIndex >= listCount - 1 || isMovingList}
+                onSelect={() => void onMoveList(list.id, listIndex + 1)}
+              >
+                <ArrowRight aria-hidden="true" />
+                Move right
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setIconOpen(true)}>
+              <PanelTop aria-hidden="true" />
+              Choose icon
+              <span className="ml-auto text-xs text-muted-foreground">
+                {icon.name}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="flex items-center gap-2">
+              <Palette aria-hidden="true" className="size-4" />
+              List color
+            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              {listColors.map((listColor) => (
+                <DropdownMenuItem
+                  key={listColor.name}
+                  onSelect={() => onSetListColor(list.id, listColor)}
+                >
+                  <span
+                    className={`size-3 rounded-full shadow-sm ring-1 ring-black/10 ${listColor.swatch}`}
+                    aria-hidden="true"
+                  />
+                  {listColor.name}
+                  {color.name === listColor.name && (
+                    <Check aria-hidden="true" className="ml-auto" />
+                  )}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <div className="grid grid-cols-2 gap-2 p-1">
@@ -915,6 +1140,14 @@ function BoardListSection({
           onOpenChange={setRenameOpen}
           updateListMutation={updateListMutation}
         />
+        <ListIconDialog
+          color={color}
+          icon={icon}
+          list={list}
+          open={iconOpen}
+          onOpenChange={setIconOpen}
+          onSetIcon={onSetListIcon}
+        />
         <DeleteListDialog
           deleteListMutation={deleteListMutation}
           list={list}
@@ -925,9 +1158,9 @@ function BoardListSection({
 
       <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
         {!isCollapsed && (
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-muted/35 p-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-white/20 p-2 backdrop-blur-xl dark:bg-background/20">
             {list.cards.length === 0 ? (
-              <div className="rounded-lg border border-dashed bg-background/70 p-3 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-white/55 bg-white/45 p-3 text-sm text-muted-foreground backdrop-blur-xl dark:bg-background/45">
                 {isFiltering ? 'No matching cards.' : 'Drop a card here.'}
               </div>
             ) : (
@@ -955,6 +1188,72 @@ function BoardListSection({
   )
 }
 
+function ListIconDialog({
+  color,
+  icon,
+  list,
+  open,
+  onOpenChange,
+  onSetIcon,
+}: {
+  color: ListColor
+  icon: ListIcon
+  list: BoardListWithCards
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSetIcon: (listId: string, icon: ListIcon) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Choose list icon</DialogTitle>
+          <DialogDescription>
+            Pick a lucide icon for "{list.name}". This is a local board style.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {listIcons.map((listIcon) => {
+            const OptionIcon = listIcon.icon
+            const isSelected = icon.name === listIcon.name
+
+            return (
+              <Button
+                key={listIcon.name}
+                type="button"
+                variant={isSelected ? 'secondary' : 'outline'}
+                className={
+                  isSelected
+                    ? 'relative h-20 flex-col gap-2 border-primary/30 bg-primary/10 text-primary'
+                    : 'relative h-20 flex-col gap-2 bg-background/80'
+                }
+                onClick={() => {
+                  onSetIcon(list.id, listIcon)
+                  onOpenChange(false)
+                }}
+              >
+                <span
+                  className={`flex size-8 items-center justify-center rounded-lg ${color.icon}`}
+                >
+                  <OptionIcon aria-hidden="true" className="size-4" />
+                </span>
+                <span className="text-xs">{listIcon.name}</span>
+                {isSelected && (
+                  <Check
+                    aria-hidden="true"
+                    className="absolute right-2 top-2"
+                  />
+                )}
+              </Button>
+            )
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function SortableCard({
   boardId,
   card,
@@ -972,6 +1271,7 @@ function SortableCard({
   onSetCardColor: (cardId: string, color: CardColor) => void
   onToggleWatchedCard: (cardId: string) => void
 }) {
+  const [isCardInteractionOpen, setIsCardInteractionOpen] = useState(false)
   const {
     attributes,
     isDragging,
@@ -986,6 +1286,7 @@ function SortableCard({
       cardId: card.id,
       listId: card.listId,
     },
+    disabled: isCardInteractionOpen,
   })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -1000,8 +1301,8 @@ function SortableCard({
       {...listeners}
       className={
         isDragging
-          ? 'cursor-grabbing rounded-lg bg-card p-3 text-card-foreground opacity-50 shadow-sm ring-2 ring-ring'
-          : 'cursor-grab rounded-lg bg-card p-3 text-card-foreground shadow-sm ring-1 ring-border transition-all hover:-translate-y-px hover:shadow-md'
+          ? 'cursor-grabbing rounded-xl bg-white/75 p-3 text-card-foreground opacity-60 shadow-lg ring-2 ring-white/80 backdrop-blur-xl dark:bg-background/75'
+          : 'cursor-grab rounded-xl bg-white/70 p-3 text-card-foreground shadow-md shadow-foreground/5 ring-1 ring-white/70 backdrop-blur-xl transition-all hover:-translate-y-px hover:bg-white/85 hover:shadow-lg dark:bg-background/70'
       }
     >
       <CardShell
@@ -1010,6 +1311,7 @@ function SortableCard({
         compact={compact}
         color={color}
         isWatched={isWatched}
+        onInteractionOpenChange={setIsCardInteractionOpen}
         onSetCardColor={onSetCardColor}
         onToggleWatchedCard={onToggleWatchedCard}
       />
@@ -1059,7 +1361,7 @@ function RenameListDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onPointerDownCapture={(event) => event.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>Rename list</DialogTitle>
           <DialogDescription>Update this list title.</DialogDescription>
@@ -1162,6 +1464,7 @@ function CardShell({
   compact = false,
   color = cardColors[0],
   isWatched = false,
+  onInteractionOpenChange,
   onSetCardColor,
   onToggleWatchedCard,
 }: {
@@ -1171,12 +1474,23 @@ function CardShell({
   compact?: boolean
   color?: CardColor
   isWatched?: boolean
+  onInteractionOpenChange?: (open: boolean) => void
   onSetCardColor?: (cardId: string, color: CardColor) => void
   onToggleWatchedCard?: (cardId: string) => void
 }) {
   const updateCardMutation = useUpdateCardMutation(boardId ?? '')
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+
+  function handleDetailsOpenChange(open: boolean) {
+    setDetailsOpen(open)
+    onInteractionOpenChange?.(open || editOpen)
+  }
+
+  function handleEditOpenChange(open: boolean) {
+    setEditOpen(open)
+    onInteractionOpenChange?.(open || detailsOpen)
+  }
 
   async function handleToggleCompleted() {
     if (!boardId) {
@@ -1199,14 +1513,21 @@ function CardShell({
 
   return (
     <>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className={
           className
-            ? `group/card-button w-full rounded-lg bg-card p-3 text-left text-card-foreground ring-1 ring-border transition-all hover:ring-primary/70 focus-visible:ring-2 focus-visible:ring-primary ${className}`
-            : 'group/card-button w-full rounded-lg bg-card p-3 text-left text-card-foreground ring-1 ring-border transition-all hover:ring-primary/70 focus-visible:ring-2 focus-visible:ring-primary'
+            ? `group/card-button w-full rounded-xl bg-white/75 p-3 text-left text-card-foreground ring-1 ring-white/70 backdrop-blur-xl transition-all hover:bg-white/90 hover:ring-white focus-visible:ring-2 focus-visible:ring-primary dark:bg-background/75 ${className}`
+            : 'group/card-button w-full rounded-xl bg-white/75 p-3 text-left text-card-foreground ring-1 ring-white/70 backdrop-blur-xl transition-all hover:bg-white/90 hover:ring-white focus-visible:ring-2 focus-visible:ring-primary dark:bg-background/75'
         }
-        onClick={() => setDetailsOpen(true)}
+        onClick={() => handleDetailsOpenChange(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            handleDetailsOpenChange(true)
+          }
+        }}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5">
@@ -1224,7 +1545,7 @@ function CardShell({
                 aria-label={`Quick edit ${card.title}`}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setEditOpen(true)
+                  handleEditOpenChange(true)
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
               >
@@ -1233,8 +1554,10 @@ function CardShell({
               <CardSettingsMenu
                 boardId={boardId}
                 card={card}
-                color={color}
                 isWatched={isWatched}
+                onInteractionOpenChange={onInteractionOpenChange}
+                onEditCard={() => handleEditOpenChange(true)}
+                onOpenCard={() => handleDetailsOpenChange(true)}
                 onSetCardColor={onSetCardColor}
                 onToggleWatchedCard={onToggleWatchedCard}
               />
@@ -1312,7 +1635,7 @@ function CardShell({
               {card.description && (
                 <span className="flex items-center gap-1.5">
                   <MessageSquare aria-hidden="true" className="size-3.5" />
-                  Has notes
+                  Description
                 </span>
               )}
               {isWatched && (
@@ -1325,20 +1648,21 @@ function CardShell({
             <Badge variant="outline">Card</Badge>
           </div>
         )}
-      </button>
+      </div>
       {boardId && (
         <EditCardDialog
           card={card}
           open={editOpen}
-          onOpenChange={setEditOpen}
+          onOpenChange={handleEditOpenChange}
           updateCardMutation={updateCardMutation}
         />
       )}
       <CardDetailDialog
+        boardId={boardId}
         card={card}
         color={color}
         open={detailsOpen}
-        onOpenChange={setDetailsOpen}
+        onOpenChange={handleDetailsOpenChange}
       />
     </>
   )
@@ -1347,15 +1671,19 @@ function CardShell({
 function CardSettingsMenu({
   boardId,
   card,
-  color,
   isWatched,
+  onInteractionOpenChange,
+  onEditCard,
+  onOpenCard,
   onSetCardColor,
   onToggleWatchedCard,
 }: {
   boardId: string
   card: BoardCard
-  color: CardColor
   isWatched: boolean
+  onInteractionOpenChange?: (open: boolean) => void
+  onEditCard: () => void
+  onOpenCard: () => void
   onSetCardColor: (cardId: string, color: CardColor) => void
   onToggleWatchedCard: (cardId: string) => void
 }) {
@@ -1363,9 +1691,18 @@ function CardSettingsMenu({
   const deleteCardMutation = useDeleteCardMutation(boardId)
   const moveCardMutation = useMoveCardMutation(boardId)
   const updateCardMutation = useUpdateCardMutation(boardId)
-  const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  function handleMenuOpenChange(open: boolean) {
+    setMenuOpen(open)
+    onInteractionOpenChange?.(open || deleteOpen)
+  }
+
+  function handleDeleteOpenChange(open: boolean) {
+    setDeleteOpen(open)
+    onInteractionOpenChange?.(open || menuOpen)
+  }
 
   async function handleCopy(text: string, successMessage: string) {
     try {
@@ -1425,33 +1762,33 @@ function CardSettingsMenu({
   return (
     <div
       onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-xs" aria-label="Card settings">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Card settings"
+            onClick={(event) => event.stopPropagation()}
+          >
             <MoreHorizontal aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent
+          align="end"
+          className="w-56"
+          onPointerDownCapture={(event) => event.stopPropagation()}
+        >
           <DropdownMenuLabel>Card settings</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setDetailsOpen(true)
-              }}
-            >
+            <DropdownMenuItem onSelect={onOpenCard}>
               <PanelTop aria-hidden="true" />
               Open card
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
-                setEditOpen(true)
-              }}
-            >
+            <DropdownMenuItem onSelect={onEditCard}>
               <Edit3 aria-hidden="true" />
               Edit card
             </DropdownMenuItem>
@@ -1535,7 +1872,7 @@ function CardSettingsMenu({
             variant="destructive"
             onSelect={(event) => {
               event.preventDefault()
-              setDeleteOpen(true)
+              handleDeleteOpenChange(true)
             }}
           >
             <Trash2 aria-hidden="true" />
@@ -1543,23 +1880,11 @@ function CardSettingsMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <EditCardDialog
-        card={card}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        updateCardMutation={updateCardMutation}
-      />
       <DeleteCardDialog
         card={card}
         deleteCardMutation={deleteCardMutation}
         open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-      />
-      <CardDetailDialog
-        card={card}
-        color={color}
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
+        onOpenChange={handleDeleteOpenChange}
       />
     </div>
   )
@@ -1609,7 +1934,10 @@ function EditCardDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        className="w-[calc(100vw-2rem)] max-w-lg"
+        onPointerDownCapture={(event) => event.stopPropagation()}
+      >
         <DialogHeader>
           <DialogTitle>Edit card</DialogTitle>
           <DialogDescription>
@@ -1626,6 +1954,7 @@ function EditCardDialog({
             </label>
             <Input
               id={`card-title-${card.id}`}
+              className="max-w-full"
               value={title}
               aria-invalid={Boolean(titleError)}
               onChange={(event) => setTitle(event.target.value)}
@@ -1643,6 +1972,7 @@ function EditCardDialog({
             </label>
             <Textarea
               id={`card-description-${card.id}`}
+              className="max-h-64 max-w-full resize-y [field-sizing:fixed]"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
@@ -1690,7 +2020,7 @@ function DeleteCardDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent onPointerDownCapture={(event) => event.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>Delete card</DialogTitle>
           <DialogDescription>
@@ -1718,30 +2048,294 @@ function DeleteCardDialog({
   )
 }
 
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`
+  }
+
+  if (size < 1024 * 1024) {
+    return `${Math.round(size / 1024)} KB`
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function CardDetailDialog({
+  boardId,
   card,
   color,
   open,
   onOpenChange,
 }: {
+  boardId?: string
   card: BoardCard
   color: CardColor
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const updateCardMutation = useUpdateCardMutation(boardId ?? '')
+  const createCommentMutation = useCreateCardCommentMutation(boardId ?? '')
+  const updateCommentMutation = useUpdateCardCommentMutation(boardId ?? '')
+  const deleteCommentMutation = useDeleteCardCommentMutation(boardId ?? '')
+  const comments = card.comments ?? []
+  const checklistRef = useRef<HTMLDivElement>(null)
+  const attachmentsRef = useRef<HTMLDivElement>(null)
+  const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const [attachments, setAttachments] = useState<CardAttachmentItem[]>([])
+  const [assignedMembers, setAssignedMembers] = useState<string[]>([])
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
+  const [checklistText, setChecklistText] = useState('')
+  const [commentText, setCommentText] = useState('')
+  const [description, setDescription] = useState(card.description ?? '')
+  const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(
+    null,
+  )
+  const [editingAttachmentName, setEditingAttachmentName] = useState('')
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<
+    string | null
+  >(null)
+  const [editingChecklistItemText, setEditingChecklistItemText] = useState('')
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingCommentText, setEditingCommentText] = useState('')
+  const [isEditingDescription, setIsEditingDescription] = useState(false)
+  const [hideCheckedItems, setHideCheckedItems] = useState(false)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [membersPopoverOpen, setMembersPopoverOpen] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
+  const checklistCompletedCount = checklistItems.filter(
+    (item) => item.completed,
+  ).length
+  const checklistProgress =
+    checklistItems.length === 0
+      ? 0
+      : Math.round((checklistCompletedCount / checklistItems.length) * 100)
+  const availableMembers = ['Alex Langidis', 'Demo User']
+  const filteredMembers = availableMembers.filter((member) =>
+    member.toLowerCase().includes(memberSearch.trim().toLowerCase()),
+  )
+  const visibleChecklistItems = hideCheckedItems
+    ? checklistItems.filter((item) => !item.completed)
+    : checklistItems
+
+  function scrollToSection(ref: RefObject<HTMLDivElement | null>) {
+    ref.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
+
+  async function handleSaveDescription() {
+    if (!boardId) {
+      return
+    }
+
+    try {
+      await updateCardMutation.mutateAsync({
+        cardId: card.id,
+        input: {
+          description: description.trim() || null,
+        },
+      })
+      setIsEditingDescription(false)
+      toast.success('Description updated.')
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update description.',
+      )
+    }
+  }
+
+  async function handleAddComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!boardId || !commentText.trim()) {
+      return
+    }
+
+    try {
+      await createCommentMutation.mutateAsync({
+        cardId: card.id,
+        input: {
+          body: commentText.trim(),
+        },
+      })
+      setCommentText('')
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to add comment.',
+      )
+    }
+  }
+
+  async function handleSaveComment(commentId: string) {
+    if (!boardId || !editingCommentText.trim()) {
+      return
+    }
+
+    try {
+      await updateCommentMutation.mutateAsync({
+        commentId,
+        input: {
+          body: editingCommentText.trim(),
+        },
+      })
+      setEditingCommentId(null)
+      setEditingCommentText('')
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to update comment.',
+      )
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (!boardId) {
+      return
+    }
+
+    try {
+      await deleteCommentMutation.mutateAsync(commentId)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to delete comment.',
+      )
+    }
+  }
+
+  function handleAddChecklistItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!checklistText.trim()) {
+      return
+    }
+
+    setChecklistItems((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        completed: false,
+        text: checklistText.trim(),
+      },
+    ])
+    setChecklistText('')
+  }
+
+  function handleSaveChecklistItem(itemId: string) {
+    if (!editingChecklistItemText.trim()) {
+      return
+    }
+
+    setChecklistItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              text: editingChecklistItemText.trim(),
+            }
+          : item,
+      ),
+    )
+    setEditingChecklistItemId(null)
+    setEditingChecklistItemText('')
+  }
+
+  function handleToggleAssignedMember(member: string) {
+    setAssignedMembers((current) =>
+      current.includes(member)
+        ? current.filter((currentMember) => currentMember !== member)
+        : [...current, member],
+    )
+  }
+
+  function handleAddAttachments(files: FileList | null) {
+    if (!files?.length) {
+      return
+    }
+
+    setAttachments((current) => [
+      ...current,
+      ...Array.from(files).map((file) => ({
+        file,
+        id: crypto.randomUUID(),
+        name: file.name,
+        size: file.size,
+        url: URL.createObjectURL(file),
+      })),
+    ])
+
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = ''
+    }
+  }
+
+  function handleSaveAttachmentName(attachmentId: string) {
+    if (!editingAttachmentName.trim()) {
+      return
+    }
+
+    setAttachments((current) =>
+      current.map((attachment) =>
+        attachment.id === attachmentId
+          ? {
+              ...attachment,
+              name: editingAttachmentName.trim(),
+            }
+          : attachment,
+      ),
+    )
+    setEditingAttachmentId(null)
+    setEditingAttachmentName('')
+  }
+
+  function handleDeleteAttachment(attachmentId: string) {
+    setAttachments((current) => {
+      const attachment = current.find((item) => item.id === attachmentId)
+
+      if (attachment) {
+        URL.revokeObjectURL(attachment.url)
+      }
+
+      return current.filter((item) => item.id !== attachmentId)
+    })
+  }
+
+  function handleDownloadAttachment(attachment: CardAttachmentItem) {
+    const anchor = document.createElement('a')
+
+    anchor.href = attachment.url
+    anchor.download = attachment.name
+    anchor.click()
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-3rem)] gap-0 overflow-hidden p-0 sm:max-w-5xl">
+      <DialogContent
+        className="grid h-[calc(100svh-3rem)] max-h-[calc(100svh-3rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-5xl"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
         <DialogHeader className="border-b px-6 py-4">
           <div className="flex items-center justify-between gap-4 pr-10">
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm">
-                List
-              </Button>
-              <Badge variant={card.completed ? 'secondary' : 'outline'}>
-                {card.completed ? 'Complete' : 'Open'}
-              </Badge>
-            </div>
+            <Badge
+              variant="outline"
+              className={
+                card.completed
+                  ? 'border-emerald-300/70 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-300'
+                  : 'border-white/55 bg-white/50 text-muted-foreground'
+              }
+            >
+              {card.completed ? 'Complete' : 'Open'}
+            </Badge>
             <div className="flex items-center gap-1.5">
               <span className={`h-1.5 w-12 rounded-full ${color.bar}`} />
               {card.description && (
@@ -1750,75 +2344,524 @@ function CardDetailDialog({
             </div>
           </div>
         </DialogHeader>
-        <div className="grid min-h-[28rem] overflow-hidden md:grid-cols-[1fr_28rem]">
-          <section className="min-w-0 overflow-y-auto px-6 py-6">
-            <div className="flex items-start gap-4">
+        <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_28rem]">
+          <section className="min-h-0 min-w-0 overflow-y-auto px-6 py-6">
+            <div className="flex items-center gap-4">
               {card.completed ? (
                 <SquareCheckBig
                   aria-hidden="true"
-                  className="mt-1 size-5 shrink-0 text-green-600"
+                  className="size-5 shrink-0 text-emerald-600"
                 />
               ) : (
                 <Square
                   aria-hidden="true"
-                  className="mt-1 size-5 shrink-0 text-muted-foreground"
+                  className="size-5 shrink-0 text-muted-foreground"
                 />
               )}
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-3xl leading-tight font-semibold tracking-tight">
                   {card.title}
                 </DialogTitle>
-                <DialogDescription className="mt-2">
-                  Card #{card.position + 1}
-                </DialogDescription>
               </div>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2 pl-9">
-              <Button variant="outline" size="sm">
-                <PlusCircle data-icon="inline-start" />
-                Add
-              </Button>
-              <Button variant="outline" size="sm">
-                <Palette data-icon="inline-start" />
-                Labels
-              </Button>
-              <Button variant="outline" size="sm">
-                <CalendarDays data-icon="inline-start" />
-                Dates
-              </Button>
-              <Button variant="outline" size="sm">
-                <SquareCheckBig data-icon="inline-start" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => scrollToSection(checklistRef)}
+              >
+                <CheckCircle2 aria-hidden="true" />
                 Checklist
               </Button>
-              <Button variant="outline" size="sm">
-                <Users data-icon="inline-start" />
-                Members
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant={membersPopoverOpen ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMembersPopoverOpen((current) => !current)}
+                >
+                  <Users aria-hidden="true" />
+                  Members
+                </Button>
+                {membersPopoverOpen && (
+                  <div
+                    className="absolute top-[calc(100%+0.5rem)] left-0 z-50 w-80 rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
+                    onPointerDownCapture={(event) => event.stopPropagation()}
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="flex-1 text-center text-sm font-semibold">
+                        Members
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Close members"
+                        onClick={() => setMembersPopoverOpen(false)}
+                      >
+                        <X aria-hidden="true" />
+                      </Button>
+                    </div>
+                    <Input
+                      value={memberSearch}
+                      onChange={(event) => setMemberSearch(event.target.value)}
+                      placeholder="Search members"
+                      autoFocus
+                    />
+                    <p className="mt-4 mb-2 text-xs font-semibold text-muted-foreground">
+                      Board members
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      {filteredMembers.map((member) => {
+                        const isAssigned = assignedMembers.includes(member)
+
+                        return (
+                          <button
+                            key={member}
+                            type="button"
+                            className={
+                              isAssigned
+                                ? 'flex items-center gap-2 rounded-md bg-muted px-2 py-2 text-left text-sm'
+                                : 'flex items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted'
+                            }
+                            onClick={() => handleToggleAssignedMember(member)}
+                          >
+                            <Avatar
+                              className={
+                                member === 'Alex Langidis'
+                                  ? 'size-8 bg-orange-500 text-white'
+                                  : 'size-8'
+                              }
+                            >
+                              <AvatarFallback>
+                                {getInitials(member)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="min-w-0 flex-1 truncate">
+                              {member}
+                            </span>
+                            {isAssigned && (
+                              <Check
+                                aria-hidden="true"
+                                className="size-4 text-emerald-600"
+                              />
+                            )}
+                          </button>
+                        )
+                      })}
+                      {filteredMembers.length === 0 && (
+                        <p className="px-2 py-4 text-sm text-muted-foreground">
+                          No members found.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => attachmentInputRef.current?.click()}
+              >
+                <Paperclip aria-hidden="true" />
+                Attachment
               </Button>
+              <input
+                ref={attachmentInputRef}
+                className="sr-only"
+                type="file"
+                multiple
+                onChange={(event) => handleAddAttachments(event.target.files)}
+              />
             </div>
 
             <section className="mt-8 pl-9">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <MessageSquare
+                  <AlignLeft
                     aria-hidden="true"
                     className="size-5 text-muted-foreground"
                   />
                   <h3 className="text-base font-semibold">Description</h3>
                 </div>
-                <Button variant="outline" size="sm">
-                  Edit
-                </Button>
+                {!isEditingDescription && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditingDescription(true)}
+                  >
+                    Edit
+                  </Button>
+                )}
               </div>
-              <div className="mt-4 rounded-lg bg-muted/40 p-4">
-                <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                  {card.description || 'No description yet.'}
-                </p>
-              </div>
+              {isEditingDescription ? (
+                <div className="mt-4 flex flex-col gap-3">
+                  <Textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Add a description..."
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void handleSaveDescription()}
+                      disabled={updateCardMutation.isPending}
+                    >
+                      {updateCardMutation.isPending ? 'Saving...' : 'Save'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setDescription(card.description ?? '')
+                        setIsEditingDescription(false)
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-lg bg-muted/40 p-4">
+                  <p className="whitespace-pre-wrap break-words text-sm leading-6">
+                    {card.description || 'No description yet.'}
+                  </p>
+                </div>
+              )}
             </section>
+
+            <section ref={checklistRef} className="mt-8 pl-9">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2
+                    aria-hidden="true"
+                    className="size-5 text-muted-foreground"
+                  />
+                  <h3 className="text-base font-semibold">Checklist</h3>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {checklistCompletedCount > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setHideCheckedItems((current) => !current)}
+                    >
+                      {hideCheckedItems
+                        ? 'Show checked items'
+                        : 'Hide checked items'}
+                    </Button>
+                  )}
+                  {checklistItems.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setChecklistItems([])}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-3">
+                <span className="w-9 text-xs text-muted-foreground">
+                  {checklistProgress}%
+                </span>
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${checklistProgress}%` }}
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-2">
+                {visibleChecklistItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start gap-3 rounded-lg border bg-background/70 p-2"
+                  >
+                    <button
+                      type="button"
+                      className="mt-1 flex size-4 shrink-0 items-center justify-center rounded border border-input text-emerald-600"
+                      aria-label={
+                        item.completed
+                          ? `Mark ${item.text} incomplete`
+                          : `Mark ${item.text} complete`
+                      }
+                      onClick={() =>
+                        setChecklistItems((current) =>
+                          current.map((currentItem) =>
+                            currentItem.id === item.id
+                              ? {
+                                  ...currentItem,
+                                  completed: !currentItem.completed,
+                                }
+                              : currentItem,
+                          ),
+                        )
+                      }
+                    >
+                      {item.completed && (
+                        <Check aria-hidden="true" className="size-3" />
+                      )}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      {editingChecklistItemId === item.id ? (
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            value={editingChecklistItemText}
+                            onChange={(event) =>
+                              setEditingChecklistItemText(event.target.value)
+                            }
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleSaveChecklistItem(item.id)}
+                              disabled={!editingChecklistItemText.trim()}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingChecklistItemId(null)
+                                setEditingChecklistItemText('')
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={
+                            item.completed
+                              ? 'min-w-0 text-left text-sm text-muted-foreground line-through'
+                              : 'min-w-0 text-left text-sm'
+                          }
+                          onClick={() => {
+                            setEditingChecklistItemId(item.id)
+                            setEditingChecklistItemText(item.text)
+                          }}
+                        >
+                          {item.text}
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Remove ${item.text}`}
+                      onClick={() =>
+                        setChecklistItems((current) =>
+                          current.filter(
+                            (currentItem) => currentItem.id !== item.id,
+                          ),
+                        )
+                      }
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <form
+                className="mt-3 flex flex-col gap-2 sm:flex-row"
+                onSubmit={handleAddChecklistItem}
+              >
+                <Input
+                  value={checklistText}
+                  onChange={(event) => setChecklistText(event.target.value)}
+                  placeholder="Add an item"
+                />
+                <Button type="submit" disabled={!checklistText.trim()}>
+                  Add
+                </Button>
+              </form>
+            </section>
+
+            {assignedMembers.length > 0 && (
+              <section className="mt-8 pl-9">
+                <div className="flex items-center gap-3">
+                  <Users
+                    aria-hidden="true"
+                    className="size-5 text-muted-foreground"
+                  />
+                  <h3 className="text-base font-semibold">Members</h3>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {assignedMembers.map((member) => (
+                    <Badge
+                      key={member}
+                      className="gap-1 border-white/55 bg-white/55 text-foreground shadow-sm backdrop-blur-xl"
+                    >
+                      {member}
+                      <button
+                        type="button"
+                        className="rounded-full text-muted-foreground hover:text-foreground"
+                        aria-label={`Remove ${member}`}
+                        onClick={() => handleToggleAssignedMember(member)}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {attachments.length > 0 && (
+              <section ref={attachmentsRef} className="mt-8 pl-9">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Paperclip
+                      aria-hidden="true"
+                      className="size-5 text-muted-foreground"
+                    />
+                    <h3 className="text-base font-semibold">Attachments</h3>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => attachmentInputRef.current?.click()}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
+                  {attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center gap-3 rounded-lg border bg-background/70 p-3"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <Paperclip aria-hidden="true" className="size-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        {editingAttachmentId === attachment.id ? (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                              value={editingAttachmentName}
+                              onChange={(event) =>
+                                setEditingAttachmentName(event.target.value)
+                              }
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() =>
+                                  handleSaveAttachmentName(attachment.id)
+                                }
+                                disabled={!editingAttachmentName.trim()}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingAttachmentId(null)
+                                  setEditingAttachmentName('')
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="truncate text-sm font-medium">
+                              {attachment.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatFileSize(attachment.size)}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Open ${attachment.name}`}
+                        onClick={() =>
+                          window.open(attachment.url, '_blank', 'noopener')
+                        }
+                      >
+                        <ExternalLink aria-hidden="true" />
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`${attachment.name} options`}
+                          >
+                            <MoreHorizontal aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              window.open(attachment.url, '_blank', 'noopener')
+                            }
+                          >
+                            <ExternalLink aria-hidden="true" />
+                            Open
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setEditingAttachmentId(attachment.id)
+                              setEditingAttachmentName(attachment.name)
+                            }}
+                          >
+                            <Edit3 aria-hidden="true" />
+                            Edit name
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              handleDownloadAttachment(attachment)
+                            }
+                          >
+                            <Download aria-hidden="true" />
+                            Download
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() =>
+                              handleDeleteAttachment(attachment.id)
+                            }
+                          >
+                            <Trash2 aria-hidden="true" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </section>
 
-          <aside className="border-t bg-muted/35 px-4 py-5 md:border-t-0 md:border-l">
+          <aside className="min-h-0 overflow-y-auto border-t bg-muted/35 px-4 py-5 md:border-t-0 md:border-l">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <MessageSquare
@@ -1827,17 +2870,51 @@ function CardDetailDialog({
                 />
                 <h3 className="font-semibold">Comments and activity</h3>
               </div>
-              <Button variant="outline" size="sm">
-                Show details
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDetails((current) => !current)}
+              >
+                {showDetails ? 'Hide details' : 'Show details'}
               </Button>
             </div>
 
-            <Input
-              className="mt-4 bg-background"
-              placeholder="Write a comment..."
-            />
+            {showDetails && (
+              <div className="mt-4 rounded-lg border bg-background/70 p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className="font-medium">
+                    {card.completed ? 'Complete' : 'Open'}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Comments</span>
+                  <span className="font-medium">{comments.length}</span>
+                </div>
+              </div>
+            )}
 
-            <div className="mt-4 flex items-start gap-3">
+            <form
+              className="mt-4 flex gap-2"
+              onSubmit={(event) => void handleAddComment(event)}
+            >
+              <Input
+                className="bg-background"
+                placeholder="Write a comment..."
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+              />
+              <Button
+                type="submit"
+                disabled={
+                  !commentText.trim() || createCommentMutation.isPending
+                }
+              >
+                {createCommentMutation.isPending ? 'Adding...' : 'Add'}
+              </Button>
+            </form>
+
+            <div className="mt-4 flex items-start gap-3 rounded-lg bg-background/60 p-3">
               <Avatar className="bg-orange-500 text-white" size="sm">
                 <AvatarFallback>AL</AvatarFallback>
               </Avatar>
@@ -1848,6 +2925,93 @@ function CardDetailDialog({
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">Just now</p>
               </div>
+            </div>
+
+            <div className="mt-3 flex flex-col gap-3">
+              {comments.map((comment) => (
+                <div
+                  key={comment.id}
+                  className="flex items-start gap-3 rounded-lg bg-background/70 p-3"
+                >
+                  <Avatar size="sm">
+                    <AvatarFallback>
+                      {getInitials(comment.authorName) || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold">{comment.authorName}</p>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="Edit comment"
+                          onClick={() => {
+                            setEditingCommentId(comment.id)
+                            setEditingCommentText(comment.body)
+                          }}
+                        >
+                          <Pencil aria-hidden="true" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="Remove comment"
+                          onClick={() => void handleDeleteComment(comment.id)}
+                          disabled={deleteCommentMutation.isPending}
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </div>
+                    {editingCommentId === comment.id ? (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <Textarea
+                          value={editingCommentText}
+                          onChange={(event) =>
+                            setEditingCommentText(event.target.value)
+                          }
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void handleSaveComment(comment.id)}
+                            disabled={
+                              !editingCommentText.trim() ||
+                              updateCommentMutation.isPending
+                            }
+                          >
+                            {updateCommentMutation.isPending
+                              ? 'Saving...'
+                              : 'Save'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingCommentId(null)
+                              setEditingCommentText('')
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-1 whitespace-pre-wrap break-words">
+                        {comment.body}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(comment.updatedAt).toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </aside>
         </div>
@@ -1920,7 +3084,7 @@ function AddListForm({ boardId }: { boardId: string }) {
     return (
       <Button
         variant="outline"
-        className="h-12 w-full justify-start border-white/70 bg-background/90 shadow-lg shadow-foreground/5"
+        className="h-12 w-full justify-start rounded-2xl border-white/60 bg-white/55 shadow-xl shadow-foreground/10 backdrop-blur-2xl hover:bg-white/75 dark:bg-background/55"
         onClick={() => setIsAdding(true)}
       >
         <Plus data-icon="inline-start" />
@@ -1932,7 +3096,7 @@ function AddListForm({ boardId }: { boardId: string }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-2 rounded-xl bg-background p-2 shadow-lg ring-1 ring-border"
+      className="flex flex-col gap-2 rounded-2xl border border-white/50 bg-white/65 p-2 shadow-xl shadow-foreground/10 backdrop-blur-2xl dark:bg-background/65"
     >
       <Input
         autoFocus
@@ -1997,7 +3161,7 @@ function AddCardForm({
     return (
       <Button
         variant="ghost"
-        className="justify-start rounded-lg bg-background/70 text-muted-foreground ring-1 ring-border hover:text-foreground"
+        className="justify-start rounded-xl bg-white/45 text-muted-foreground ring-1 ring-white/55 backdrop-blur-xl hover:bg-white/70 hover:text-foreground dark:bg-background/45"
         onClick={() => setIsAdding(true)}
       >
         <Plus data-icon="inline-start" />
@@ -2009,7 +3173,7 @@ function AddCardForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-2 rounded-lg bg-background p-2 shadow-sm ring-1 ring-border"
+      className="flex flex-col gap-2 rounded-xl border border-white/55 bg-white/70 p-2 shadow-md shadow-foreground/5 backdrop-blur-xl dark:bg-background/70"
     >
       <Input
         autoFocus

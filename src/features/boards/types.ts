@@ -16,6 +16,17 @@ export type BoardCard = {
   description: string | null
   completed: boolean
   position: number
+  comments?: BoardCardComment[]
+}
+
+export type BoardCardComment = {
+  id: string
+  cardId: string
+  authorId: string
+  authorName: string
+  body: string
+  createdAt: string
+  updatedAt: string
 }
 
 export type BoardListWithCards = {
@@ -69,4 +80,17 @@ export type MoveCardInput = {
   cardId: string
   toListId: string
   toIndex: number
+}
+
+export type MoveListInput = {
+  listId: string
+  toIndex: number
+}
+
+export type CreateCardCommentInput = {
+  body: string
+}
+
+export type UpdateCardCommentInput = {
+  body: string
 }

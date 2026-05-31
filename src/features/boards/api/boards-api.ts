@@ -3,15 +3,19 @@ import { apiClient } from '@/lib/api-client'
 import type {
   Board,
   BoardCard,
+  BoardCardComment,
   BoardDetail,
   BoardListWithCards,
   CreateBoardInput,
   CreateCardInput,
+  CreateCardCommentInput,
   CreateListInput,
   MoveCardInput,
+  MoveListInput,
   ToggleBoardStarInput,
   UpdateBoardInput,
   UpdateCardInput,
+  UpdateCardCommentInput,
   UpdateListInput,
 } from '../types'
 
@@ -68,6 +72,21 @@ type CardResponse = {
   success: true
   data: {
     card: BoardCard
+  }
+}
+
+type CardCommentResponse = {
+  success: true
+  data: {
+    comment: BoardCardComment
+  }
+}
+
+type DeleteCardCommentResponse = {
+  success: true
+  data: {
+    deletedCommentId: string
+    cardId: string
   }
 }
 
@@ -137,6 +156,16 @@ export function deleteList(listId: string) {
   })
 }
 
+export function moveList(input: MoveListInput) {
+  return apiClient.patch<ListResponse, MoveListInput>(
+    '/api/lists/move',
+    input,
+    {
+      credentials: 'include',
+    },
+  )
+}
+
 export function createCard(input: CreateCardInput) {
   return apiClient.post<CardResponse, CreateCardInput>('/api/cards', input, {
     credentials: 'include',
@@ -163,6 +192,41 @@ export function moveCard(input: MoveCardInput) {
   return apiClient.patch<CardResponse, MoveCardInput>(
     '/api/cards/move',
     input,
+    {
+      credentials: 'include',
+    },
+  )
+}
+
+export function createCardComment(
+  cardId: string,
+  input: CreateCardCommentInput,
+) {
+  return apiClient.post<CardCommentResponse, CreateCardCommentInput>(
+    `/api/cards/${cardId}/comments`,
+    input,
+    {
+      credentials: 'include',
+    },
+  )
+}
+
+export function updateCardComment(
+  commentId: string,
+  input: UpdateCardCommentInput,
+) {
+  return apiClient.patch<CardCommentResponse, UpdateCardCommentInput>(
+    `/api/cards/comments/${commentId}`,
+    input,
+    {
+      credentials: 'include',
+    },
+  )
+}
+
+export function deleteCardComment(commentId: string) {
+  return apiClient.delete<DeleteCardCommentResponse>(
+    `/api/cards/comments/${commentId}`,
     {
       credentials: 'include',
     },

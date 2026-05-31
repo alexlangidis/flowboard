@@ -11,6 +11,7 @@ import {
   cards,
   comments,
   lists,
+  users,
   workspaceMembers,
   workspaces,
 } from '../db/schema'
@@ -376,6 +377,24 @@ export const boardRoutes = new Hono<AppEnv>()
             .where(inArray(cards.listId, listIds))
             .orderBy(cards.position)
         : []
+    const cardIds = boardCards.map((card) => card.id)
+    const boardComments =
+      cardIds.length > 0
+        ? await db
+            .select({
+              id: comments.id,
+              cardId: comments.cardId,
+              authorId: comments.authorId,
+              authorName: users.name,
+              body: comments.body,
+              createdAt: comments.createdAt,
+              updatedAt: comments.updatedAt,
+            })
+            .from(comments)
+            .innerJoin(users, eq(users.id, comments.authorId))
+            .where(inArray(comments.cardId, cardIds))
+            .orderBy(desc(comments.createdAt))
+        : []
 
     return c.json({
       success: true,
@@ -387,7 +406,18 @@ export const boardRoutes = new Hono<AppEnv>()
           ),
           lists: boardLists.map((list) => ({
             ...list,
-            cards: boardCards.filter((card) => card.listId === list.id),
+            cards: boardCards
+              .filter((card) => card.listId === list.id)
+              .map((card) => ({
+                ...card,
+                comments: boardComments
+                  .filter((comment) => comment.cardId === card.id)
+                  .map((comment) => ({
+                    ...comment,
+                    createdAt: comment.createdAt.toISOString(),
+                    updatedAt: comment.updatedAt.toISOString(),
+                  })),
+              })),
           })),
         },
       },
