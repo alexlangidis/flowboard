@@ -73,20 +73,6 @@ function serializeAttachment(attachment: {
   }
 }
 
-function logR2Operation(
-  operation: 'delete' | 'get' | 'head' | 'put',
-  details: {
-    attachmentId: string
-    cardId: string
-    mode?: 'download' | 'open' | 'rollback'
-  },
-) {
-  console.info('r2_operation', {
-    operation,
-    ...details,
-  })
-}
-
 async function getAccessibleCard(
   db: ReturnType<typeof createDb>,
   cardId: string,
@@ -271,10 +257,8 @@ export const attachmentRoutes = new Hono<AppEnv>()
         uploadedById: user.id,
       },
     })
-    logR2Operation('put', { attachmentId, cardId })
 
     const uploadedObject = await c.env.ATTACHMENTS_BUCKET.head(objectKey)
-    logR2Operation('head', { attachmentId, cardId })
 
     if (!uploadedObject) {
       console.error('R2 attachment upload verification failed', {
@@ -318,11 +302,6 @@ export const attachmentRoutes = new Hono<AppEnv>()
       attachment = createdAttachment
     } catch (error) {
       await c.env.ATTACHMENTS_BUCKET.delete(objectKey)
-      logR2Operation('delete', {
-        attachmentId,
-        cardId,
-        mode: 'rollback',
-      })
       throw error
     }
 
@@ -391,10 +370,6 @@ export const attachmentRoutes = new Hono<AppEnv>()
     }
 
     await c.env.ATTACHMENTS_BUCKET.delete(attachment.objectKey)
-    logR2Operation('delete', {
-      attachmentId,
-      cardId: attachment.cardId,
-    })
     await db.delete(attachments).where(eq(attachments.id, attachmentId))
 
     return c.json({
@@ -429,11 +404,6 @@ export const attachmentRoutes = new Hono<AppEnv>()
     }
 
     const object = await c.env.ATTACHMENTS_BUCKET.get(attachment.objectKey)
-    logR2Operation('get', {
-      attachmentId: attachment.id,
-      cardId: attachment.cardId,
-      mode,
-    })
 
     if (!object) {
       return c.json({ success: false, error: 'Attachment file not found' }, 404)
