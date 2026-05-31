@@ -23,6 +23,7 @@ import { getOrCreateDefaultWorkspace } from '../lib/workspaces'
 const createBoardSchema = z.object({
   name: z.string().min(1).max(80),
   description: z.string().max(240).optional(),
+  workspaceId: z.string().uuid().optional(),
 })
 
 const updateBoardSchema = z.object({
@@ -165,7 +166,23 @@ export const boardRoutes = new Hono<AppEnv>()
 
     const input = await parseJsonBody(c.req.raw, createBoardSchema)
     const db = createDb(c.env)
-    const workspaceId = await getOrCreateDefaultWorkspace(db, user)
+    const workspaceId =
+      input.workspaceId ?? (await getOrCreateDefaultWorkspace(db, user))
+    const [membership] = await db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, user.id),
+        ),
+      )
+      .limit(1)
+
+    if (!membership) {
+      return c.json({ success: false, error: 'Workspace not found' }, 404)
+    }
+
     const [board] = await db
       .insert(boards)
       .values({

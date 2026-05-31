@@ -2,6 +2,8 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bell,
+  Building2,
+  Check,
   ChevronDown,
   LayoutGrid,
   Plus,
@@ -9,6 +11,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import type { PropsWithChildren } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -21,10 +24,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
 import { getCurrentUser } from '@/features/auth/api/auth-api'
 import { useLogoutMutation } from '@/features/auth/hooks/use-auth-mutations'
 import { CreateBoardDialog } from '@/features/boards/components/create-board-dialog'
-import { useWorkspacesQuery } from '@/features/workspaces/hooks/use-workspaces'
+import {
+  useCreateWorkspaceMutation,
+  useWorkspacesQuery,
+} from '@/features/workspaces/hooks/use-workspaces'
+import { useUiStore } from '@/stores/ui-store'
 
 import { AppSearch } from './app-search'
 
@@ -58,7 +66,13 @@ export function AppLayout({ children }: PropsWithChildren) {
   const currentUser = currentUserQuery.data?.data.user
   const showAppHeader = isAppRoute && Boolean(currentUser)
   const workspacesQuery = useWorkspacesQuery(showAppHeader)
-  const workspace = workspacesQuery.data?.data.workspaces[0]
+  const workspaces = workspacesQuery.data?.data.workspaces ?? []
+  const activeWorkspaceId = useUiStore((state) => state.activeWorkspaceId)
+  const setActiveWorkspaceId = useUiStore((state) => state.setActiveWorkspaceId)
+  const workspace =
+    workspaces.find((item) => item.id === activeWorkspaceId) ?? workspaces[0]
+  const createWorkspaceMutation = useCreateWorkspaceMutation()
+  const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const initials =
     currentUser?.name
       .split(' ')
@@ -80,6 +94,26 @@ export function AppLayout({ children }: PropsWithChildren) {
     }
   }
 
+  async function handleAddWorkspace() {
+    if (!newWorkspaceName.trim()) {
+      return
+    }
+
+    try {
+      const response = await createWorkspaceMutation.mutateAsync({
+        name: newWorkspaceName.trim(),
+      })
+
+      setActiveWorkspaceId(response.data.workspace.id)
+      setNewWorkspaceName('')
+      toast.success('Workspace added.')
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to add workspace.',
+      )
+    }
+  }
+
   return (
     <div className="min-h-svh bg-background text-foreground">
       {showAppHeader && (
@@ -94,19 +128,82 @@ export function AppLayout({ children }: PropsWithChildren) {
               </span>
             </Link>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-1 hidden max-w-48 gap-1 md:inline-flex"
-            >
-              <span className="truncate">{workspace?.name ?? 'Workspace'}</span>
-              <ChevronDown aria-hidden="true" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-1 hidden max-w-56 gap-1 md:inline-flex"
+                >
+                  <span className="truncate">
+                    {workspace?.name ?? 'Workspace'}
+                  </span>
+                  <ChevronDown aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72">
+                <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+                {workspaces.length > 0 ? (
+                  workspaces.map((workspaceItem) => (
+                    <DropdownMenuItem
+                      key={workspaceItem.id}
+                      onSelect={() => setActiveWorkspaceId(workspaceItem.id)}
+                    >
+                      <Building2 aria-hidden="true" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {workspaceItem.name}
+                      </span>
+                      {workspace?.id === workspaceItem.id && (
+                        <Check aria-hidden="true" className="ml-auto" />
+                      )}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled>
+                    No workspaces found
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <div
+                  className="space-y-2 p-2"
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <label
+                    className="text-xs font-medium text-muted-foreground"
+                    htmlFor="topbar-new-workspace"
+                  >
+                    Add workspace
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="topbar-new-workspace"
+                      value={newWorkspaceName}
+                      onChange={(event) =>
+                        setNewWorkspaceName(event.target.value)
+                      }
+                      placeholder="Workspace name"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={
+                        createWorkspaceMutation.isPending ||
+                        !newWorkspaceName.trim()
+                      }
+                      onClick={() => void handleAddWorkspace()}
+                    >
+                      <Plus aria-hidden="true" />
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <AppSearch />
 
             {canCreateBoard ? (
-              <CreateBoardDialog>
+              <CreateBoardDialog workspaceId={workspace?.id}>
                 <Button size="sm" className="ml-auto shadow-sm md:ml-0">
                   <Plus data-icon="inline-start" />
                   Create

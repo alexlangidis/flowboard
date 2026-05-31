@@ -15,7 +15,7 @@ import { getCurrentUser } from '@/features/auth/api/auth-api'
 import { requireAuthenticatedUser } from '@/features/auth/api/route-guards'
 import { useBoardsQuery } from '@/features/boards/hooks/use-boards'
 import { WorkspaceShell } from '@/features/workspaces/components/workspace-shell'
-import { useWorkspacesQuery } from '@/features/workspaces/hooks/use-workspaces'
+import { useActiveWorkspace } from '@/features/workspaces/hooks/use-active-workspace'
 
 export const Route = createFileRoute('/members')({
   beforeLoad: requireAuthenticatedUser,
@@ -28,11 +28,9 @@ function MembersPage() {
     queryFn: getCurrentUser,
   })
   const boardsQuery = useBoardsQuery()
-  const workspacesQuery = useWorkspacesQuery()
   const boards = boardsQuery.data?.data.boards ?? []
-  const workspace = workspacesQuery.data?.data.workspaces[0]
-  const workspaceName =
-    workspace?.name ?? boards[0]?.workspaceName ?? 'Workspace'
+  const { workspace, workspaceBoards, workspaceName } =
+    useActiveWorkspace(boards)
   const currentUser = currentUserQuery.data?.data.user
   const initials =
     currentUser?.name
@@ -45,7 +43,7 @@ function MembersPage() {
   return (
     <WorkspaceShell
       activeItem="members"
-      boards={boards}
+      boards={workspaceBoards}
       workspaceName={workspaceName}
     >
       <div className="rounded-2xl border bg-background p-5 shadow-sm md:p-6">
@@ -110,7 +108,7 @@ function MembersPage() {
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Workspace boards</span>
-              <span className="font-medium">{boards.length}</span>
+              <span className="font-medium">{workspaceBoards.length}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Invite support</span>

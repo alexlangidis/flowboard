@@ -15,7 +15,7 @@ import { BoardCard } from '@/features/boards/components/board-card'
 import { CreateBoardDialog } from '@/features/boards/components/create-board-dialog'
 import { useBoardsQuery } from '@/features/boards/hooks/use-boards'
 import { WorkspaceShell } from '@/features/workspaces/components/workspace-shell'
-import { useWorkspacesQuery } from '@/features/workspaces/hooks/use-workspaces'
+import { useActiveWorkspace } from '@/features/workspaces/hooks/use-active-workspace'
 
 export const Route = createFileRoute('/dashboard')({
   beforeLoad: requireAuthenticatedUser,
@@ -24,21 +24,19 @@ export const Route = createFileRoute('/dashboard')({
 
 function DashboardPage() {
   const boardsQuery = useBoardsQuery()
-  const workspacesQuery = useWorkspacesQuery()
   const boards = boardsQuery.data?.data.boards ?? []
-  const favoriteBoards = boards.filter((board) => board.isStarred)
+  const { activeWorkspaceId, workspaceBoards, workspaceName } =
+    useActiveWorkspace(boards)
+  const favoriteBoards = workspaceBoards.filter((board) => board.isStarred)
   const standardBoards =
     favoriteBoards.length > 0
-      ? boards.filter((board) => !board.isStarred)
-      : boards
-  const workspace = workspacesQuery.data?.data.workspaces[0]
-  const workspaceName =
-    workspace?.name ?? boards[0]?.workspaceName ?? 'Workspace'
+      ? workspaceBoards.filter((board) => !board.isStarred)
+      : workspaceBoards
 
   return (
     <WorkspaceShell
       activeItem="boards"
-      boards={boards}
+      boards={workspaceBoards}
       workspaceName={workspaceName}
     >
       <div className="rounded-2xl border bg-background p-5 shadow-sm md:p-6">
@@ -65,7 +63,7 @@ function DashboardPage() {
               <RefreshCw data-icon="inline-start" />
               Refresh
             </Button>
-            <CreateBoardDialog>
+            <CreateBoardDialog workspaceId={activeWorkspaceId ?? undefined}>
               <Button className="shadow-sm">
                 <Plus data-icon="inline-start" />
                 New board
@@ -77,7 +75,7 @@ function DashboardPage() {
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <DashboardMetric
             label="Total boards"
-            value={boards.length}
+            value={workspaceBoards.length}
             icon={LayoutDashboard}
           />
           <DashboardMetric
@@ -105,7 +103,8 @@ function DashboardPage() {
             </p>
           </div>
           <Badge variant="secondary">
-            {boards.length} {boards.length === 1 ? 'board' : 'boards'}
+            {workspaceBoards.length}{' '}
+            {workspaceBoards.length === 1 ? 'board' : 'boards'}
           </Badge>
         </div>
       </div>
@@ -174,7 +173,7 @@ function DashboardPage() {
                 </div>
                 <div>
                   <p className="font-medium">
-                    {boards.length === 0
+                    {workspaceBoards.length === 0
                       ? 'Create your first board'
                       : 'Create a board'}
                   </p>
@@ -182,7 +181,7 @@ function DashboardPage() {
                     Start with lists, cards, labels, and teammates.
                   </p>
                 </div>
-                <CreateBoardDialog>
+                <CreateBoardDialog workspaceId={activeWorkspaceId ?? undefined}>
                   <Button variant="outline" size="sm">
                     New board
                   </Button>

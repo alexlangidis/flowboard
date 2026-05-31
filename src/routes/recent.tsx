@@ -14,7 +14,7 @@ import { requireAuthenticatedUser } from '@/features/auth/api/route-guards'
 import { BoardCard } from '@/features/boards/components/board-card'
 import { useBoardsQuery } from '@/features/boards/hooks/use-boards'
 import { WorkspaceShell } from '@/features/workspaces/components/workspace-shell'
-import { useWorkspacesQuery } from '@/features/workspaces/hooks/use-workspaces'
+import { useActiveWorkspace } from '@/features/workspaces/hooks/use-active-workspace'
 
 export const Route = createFileRoute('/recent')({
   beforeLoad: requireAuthenticatedUser,
@@ -23,21 +23,18 @@ export const Route = createFileRoute('/recent')({
 
 function RecentPage() {
   const boardsQuery = useBoardsQuery()
-  const workspacesQuery = useWorkspacesQuery()
   const boards = boardsQuery.data?.data.boards ?? []
-  const recentBoards = [...boards].sort(
+  const { workspaceBoards, workspaceName } = useActiveWorkspace(boards)
+  const recentBoards = [...workspaceBoards].sort(
     (firstBoard, secondBoard) =>
       new Date(secondBoard.updatedAt).getTime() -
       new Date(firstBoard.updatedAt).getTime(),
   )
-  const workspace = workspacesQuery.data?.data.workspaces[0]
-  const workspaceName =
-    workspace?.name ?? boards[0]?.workspaceName ?? 'Workspace'
 
   return (
     <WorkspaceShell
       activeItem="recent"
-      boards={boards}
+      boards={workspaceBoards}
       workspaceName={workspaceName}
     >
       <div className="rounded-2xl border bg-background p-5 shadow-sm md:p-6">

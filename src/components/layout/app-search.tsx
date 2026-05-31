@@ -1,10 +1,11 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { LayoutDashboard, Search } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
 
 import { Input } from '@/components/ui/input'
 import { useBoardsQuery } from '@/features/boards/hooks/use-boards'
+import { useActiveWorkspace } from '@/features/workspaces/hooks/use-active-workspace'
 
 type SearchResult = {
   id: string
@@ -18,13 +19,15 @@ export function AppSearch() {
   const [query, setQuery] = useState('')
   const [isFocused, setIsFocused] = useState(false)
   const boardsQuery = useBoardsQuery()
+  const boards = boardsQuery.data?.data.boards ?? []
+  const { workspaceBoards } = useActiveWorkspace(boards)
   const normalizedQuery = query.trim().toLowerCase()
   const results = useMemo(() => {
     if (!normalizedQuery) {
       return []
     }
 
-    return (boardsQuery.data?.data.boards ?? [])
+    return workspaceBoards
       .filter((board) =>
         [board.name, board.description ?? '', board.workspaceName]
           .join(' ')
@@ -38,15 +41,14 @@ export function AppSearch() {
         description: board.workspaceName,
         label: board.name,
       }))
-  }, [boardsQuery.data, normalizedQuery])
+  }, [normalizedQuery, workspaceBoards])
   const showResults = isFocused && normalizedQuery.length > 0
 
   async function goToResult(result: SearchResult) {
     setQuery('')
     setIsFocused(false)
     await navigate({
-      to: '/boards/$boardId',
-      params: { boardId: result.boardId },
+      href: `/boards/${encodeURIComponent(result.boardId)}`,
     })
   }
 
@@ -88,15 +90,12 @@ export function AppSearch() {
           {results.length > 0 ? (
             <div className="max-h-80 overflow-y-auto p-1">
               {results.map((result) => (
-                <Link
+                <button
                   key={result.id}
-                  to="/boards/$boardId"
-                  params={{ boardId: result.boardId }}
-                  className="flex items-center gap-2 rounded-md px-2 py-2 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                  onClick={() => {
-                    setQuery('')
-                    setIsFocused(false)
-                  }}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void goToResult(result)}
                 >
                   <LayoutDashboard
                     aria-hidden="true"
@@ -110,7 +109,7 @@ export function AppSearch() {
                       {result.description}
                     </span>
                   </span>
-                </Link>
+                </button>
               ))}
             </div>
           ) : (

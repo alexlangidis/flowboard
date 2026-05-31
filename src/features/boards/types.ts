@@ -44,6 +44,7 @@ export type BoardDetail = Board & {
 export type CreateBoardInput = {
   name: string
   description?: string
+  workspaceId?: string
 }
 
 export type UpdateBoardInput = {

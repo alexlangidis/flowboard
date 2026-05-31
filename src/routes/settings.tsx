@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Bell, Database, LogOut, Settings, ShieldCheck } from 'lucide-react'
+import { Bell, LayoutGrid, LogOut, Settings, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +16,7 @@ import { requireAuthenticatedUser } from '@/features/auth/api/route-guards'
 import { useLogoutMutation } from '@/features/auth/hooks/use-auth-mutations'
 import { useBoardsQuery } from '@/features/boards/hooks/use-boards'
 import { WorkspaceShell } from '@/features/workspaces/components/workspace-shell'
-import { useWorkspacesQuery } from '@/features/workspaces/hooks/use-workspaces'
+import { useActiveWorkspace } from '@/features/workspaces/hooks/use-active-workspace'
 
 export const Route = createFileRoute('/settings')({
   beforeLoad: requireAuthenticatedUser,
@@ -28,11 +28,9 @@ function SettingsPage() {
   const queryClient = useQueryClient()
   const logoutMutation = useLogoutMutation()
   const boardsQuery = useBoardsQuery()
-  const workspacesQuery = useWorkspacesQuery()
   const boards = boardsQuery.data?.data.boards ?? []
-  const workspace = workspacesQuery.data?.data.workspaces[0]
-  const workspaceName =
-    workspace?.name ?? boards[0]?.workspaceName ?? 'Workspace'
+  const { workspace, workspaceBoards, workspaceName } =
+    useActiveWorkspace(boards)
 
   async function handleSignOut() {
     try {
@@ -48,7 +46,7 @@ function SettingsPage() {
   }
 
   return (
-    <WorkspaceShell boards={boards} workspaceName={workspaceName}>
+    <WorkspaceShell boards={workspaceBoards} workspaceName={workspaceName}>
       <div className="flex flex-col gap-4">
         <div className="rounded-2xl border bg-background p-5 shadow-sm md:p-6">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -66,22 +64,13 @@ function SettingsPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="bg-background shadow-sm">
             <CardHeader>
-              <CardTitle>Authentication</CardTitle>
+              <CardTitle>Account</CardTitle>
               <CardDescription>
-                Sign-in and session handling are powered by Neon Auth.
+                Manage your current session and account preferences.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <SettingRow
-                icon={ShieldCheck}
-                label="Provider"
-                value="Neon Auth"
-              />
-              <SettingRow
-                icon={Database}
-                label="Database"
-                value="Neon Postgres"
-              />
+              <SettingRow icon={UserRound} label="Session" value="Signed in" />
               <Button
                 variant="outline"
                 onClick={() => void handleSignOut()}
@@ -107,10 +96,10 @@ function SettingsPage() {
                 value={workspace?.name ?? 'Workspace'}
               />
               <SettingRow
-                icon={Database}
+                icon={LayoutGrid}
                 label="Boards"
-                value={`${boards.length} ${
-                  boards.length === 1 ? 'board' : 'boards'
+                value={`${workspaceBoards.length} ${
+                  workspaceBoards.length === 1 ? 'board' : 'boards'
                 }`}
               />
               <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3">

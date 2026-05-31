@@ -14,7 +14,7 @@ import { requireAuthenticatedUser } from '@/features/auth/api/route-guards'
 import { BoardCard } from '@/features/boards/components/board-card'
 import { useBoardsQuery } from '@/features/boards/hooks/use-boards'
 import { WorkspaceShell } from '@/features/workspaces/components/workspace-shell'
-import { useWorkspacesQuery } from '@/features/workspaces/hooks/use-workspaces'
+import { useActiveWorkspace } from '@/features/workspaces/hooks/use-active-workspace'
 
 export const Route = createFileRoute('/favorites')({
   beforeLoad: requireAuthenticatedUser,
@@ -23,17 +23,14 @@ export const Route = createFileRoute('/favorites')({
 
 function FavoritesPage() {
   const boardsQuery = useBoardsQuery()
-  const workspacesQuery = useWorkspacesQuery()
   const boards = boardsQuery.data?.data.boards ?? []
-  const favoriteBoards = boards.filter((board) => board.isStarred)
-  const workspace = workspacesQuery.data?.data.workspaces[0]
-  const workspaceName =
-    workspace?.name ?? boards[0]?.workspaceName ?? 'Workspace'
+  const { workspaceBoards, workspaceName } = useActiveWorkspace(boards)
+  const favoriteBoards = workspaceBoards.filter((board) => board.isStarred)
 
   return (
     <WorkspaceShell
       activeItem="favorites"
-      boards={boards}
+      boards={workspaceBoards}
       workspaceName={workspaceName}
     >
       <div className="rounded-2xl border bg-background p-5 shadow-sm md:p-6">

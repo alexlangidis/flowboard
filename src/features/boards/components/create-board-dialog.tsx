@@ -27,9 +27,13 @@ import { useCreateBoardMutation } from '../hooks/use-boards'
 
 type CreateBoardDialogProps = {
   children: ReactNode
+  workspaceId?: string
 }
 
-export function CreateBoardDialog({ children }: CreateBoardDialogProps) {
+export function CreateBoardDialog({
+  children,
+  workspaceId,
+}: CreateBoardDialogProps) {
   const navigate = useNavigate()
   const createBoardMutation = useCreateBoardMutation()
   const [open, setOpen] = useState(false)
@@ -51,6 +55,7 @@ export function CreateBoardDialog({ children }: CreateBoardDialogProps) {
       const response = await createBoardMutation.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
+        workspaceId,
       })
 
       setOpen(false)
