@@ -37,10 +37,10 @@ export function PublicNav() {
               className="hidden sm:inline-flex"
               asChild
             >
-              <Link to="/login">Login</Link>
+              <Link to="/login">Sign in</Link>
             </Button>
             <Button size="sm" asChild>
-              <Link to="/register">Register</Link>
+              <Link to="/register">Get started</Link>
             </Button>
           </>
         )}

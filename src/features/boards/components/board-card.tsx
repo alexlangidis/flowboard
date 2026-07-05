@@ -4,15 +4,10 @@ import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { useToggleBoardStarMutation } from '@/features/boards/hooks/use-boards'
 import type { Board } from '@/features/boards/types'
+import { getBoardAccentClass } from '@/lib/board-colors'
+import { cn } from '@/lib/utils'
 
 import { DeleteBoardDialog } from './delete-board-dialog'
 import { EditBoardDialog } from './edit-board-dialog'
@@ -25,6 +20,11 @@ export function BoardCard({
   featured?: boolean
 }) {
   const toggleStarMutation = useToggleBoardStarMutation(board.id)
+  const accentClass = getBoardAccentClass(board.id)
+  const updatedLabel = new Date(board.updatedAt).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
 
   async function handleToggleStar() {
     try {
@@ -37,61 +37,65 @@ export function BoardCard({
   }
 
   return (
-    <Card
-      className={
-        featured
-          ? 'h-full bg-background shadow-sm ring-1 ring-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-md'
-          : 'h-full bg-background shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md'
-      }
+    <article
+      className={cn(
+        'flex h-full min-w-0 flex-col overflow-hidden rounded-[10px] border bg-card',
+        featured ? 'border-primary/35' : 'border-border/80',
+      )}
     >
-      <CardHeader className="gap-3">
+      <div className={cn('h-1 shrink-0', accentClass)} aria-hidden="true" />
+
+      <div className="flex flex-1 flex-col gap-3 p-3.5">
         <div className="flex items-start justify-between gap-3">
           <Link
             to="/boards/$boardId"
             params={{ boardId: board.id }}
             className="min-w-0 flex-1"
           >
-            <CardTitle className="truncate text-base">{board.name}</CardTitle>
-            <CardDescription className="mt-1 line-clamp-2">
+            <h3 className="truncate text-sm font-semibold">{board.name}</h3>
+            <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
               {board.description || 'No description yet.'}
-            </CardDescription>
+            </p>
           </Link>
-          <Button
-            variant={board.isStarred ? 'secondary' : 'ghost'}
-            className={board.isStarred ? 'text-primary' : undefined}
-            size="icon-sm"
-            aria-label={
-              board.isStarred ? `Unstar ${board.name}` : `Star ${board.name}`
-            }
-            onClick={() => void handleToggleStar()}
-            disabled={toggleStarMutation.isPending}
-          >
-            <Star
-              aria-hidden="true"
-              className={board.isStarred ? 'fill-current' : undefined}
-            />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{board.workspaceName}</Badge>
-          <Badge variant="outline">{board.visibility}</Badge>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {board.isStarred ? (
+              <span
+                aria-hidden="true"
+                className="mt-1 size-2 rounded-sm bg-flow-yellow"
+              />
+            ) : null}
+            <Button
+              variant={board.isStarred ? 'secondary' : 'ghost'}
+              className={board.isStarred ? 'text-primary' : undefined}
+              size="icon-sm"
+              aria-label={
+                board.isStarred ? `Unstar ${board.name}` : `Star ${board.name}`
+              }
+              onClick={() => void handleToggleStar()}
+              disabled={toggleStarMutation.isPending}
+            >
+              <Star
+                aria-hidden="true"
+                className={board.isStarred ? 'fill-current' : undefined}
+              />
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
-            <Star aria-hidden="true" className="size-4" />
-            <span className="truncate">
-              {board.isStarred
-                ? 'Favorite'
-                : `Updated ${new Date(board.updatedAt).toLocaleDateString()}`}
-            </span>
-          </div>
+        <div className="mt-auto flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="text-xs">
+            {board.visibility}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            Updated {updatedLabel}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-end gap-1 border-t border-border/60 pt-3">
           <BoardActions board={board} />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   )
 }
 
