@@ -1,6 +1,5 @@
-import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRight,
   CheckCircle2,
@@ -29,7 +28,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  prefetchCurrentUser,
+  completeAuthRedirect,
 } from '@/features/auth/api/auth-api'
 import { authClient } from '@/lib/auth-client'
 
@@ -390,18 +389,26 @@ function VerifyEmailCodeForm({
 }
 
 export function SignInForm() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const isLeavingRef = useRef(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
   const canVerifyEmail = shouldOfferVerification(error)
 
-  async function completeSignIn() {
-    await prefetchCurrentUser(queryClient)
-    await navigate({ to: '/dashboard' })
+  async function completeSignIn(signInPayload?: {
+    token?: string | null
+    user?: {
+      id: string
+      email: string
+      name: string
+    } | null
+  }) {
+    isLeavingRef.current = true
+    setIsRedirecting(true)
+    await completeAuthRedirect(signInPayload)
   }
 
   async function signInWithCredentials(
@@ -423,11 +430,13 @@ export function SignInForm() {
         return
       }
 
-      await completeSignIn()
+      await completeSignIn(result.data)
     } catch (error) {
       setError(getCaughtErrorMessage(error, 'Unable to sign in.'))
     } finally {
-      setIsSubmitting(false)
+      if (!isLeavingRef.current) {
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -443,7 +452,7 @@ export function SignInForm() {
       return
     }
 
-    await completeSignIn()
+    await completeSignIn(result.data)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -459,21 +468,29 @@ export function SignInForm() {
   }
 
   return (
-    <AuthShell
-      title="Sign in"
-      description="Use your Flowboard account to continue."
-      footer={
-        <span>
-          No account?{' '}
-          <Link
-            className="font-medium text-foreground underline"
-            to="/register"
-          >
-            Create one
-          </Link>
-        </span>
-      }
-    >
+    <>
+      {isRedirecting ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-sm">
+          <p className="text-sm font-medium text-muted-foreground">
+            Signing you in...
+          </p>
+        </div>
+      ) : null}
+      <AuthShell
+        title="Sign in"
+        description="Use your Flowboard account to continue."
+        footer={
+          <span>
+            No account?{' '}
+            <Link
+              className="font-medium text-foreground underline"
+              to="/register"
+            >
+              Create one
+            </Link>
+          </span>
+        }
+      >
       <form className="grid gap-4" onSubmit={handleSubmit}>
         {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
         {success ? (
@@ -551,19 +568,33 @@ export function SignInForm() {
         ) : null}
       </form>
     </AuthShell>
+    </>
   )
 }
 
 export function SignUpForm() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const isLeavingRef = useRef(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
   const canVerifyEmail = Boolean(success)
+
+  async function completeSignUp(signInPayload?: {
+    token?: string | null
+    user?: {
+      id: string
+      email: string
+      name: string
+    } | null
+  }) {
+    isLeavingRef.current = true
+    setIsRedirecting(true)
+    await completeAuthRedirect(signInPayload)
+  }
 
   async function signInAfterVerification() {
     setError(null)
@@ -577,8 +608,7 @@ export function SignUpForm() {
       return
     }
 
-    await prefetchCurrentUser(queryClient)
-    await navigate({ to: '/dashboard' })
+    await completeSignUp(result.data)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -604,16 +634,26 @@ export function SignUpForm() {
         return
       }
 
-      await navigate({ to: '/dashboard' })
+      await completeSignUp(result.data)
     } catch (error) {
       setError(getCaughtErrorMessage(error, 'Unable to create account.'))
     } finally {
-      setIsSubmitting(false)
+      if (!isLeavingRef.current) {
+        setIsSubmitting(false)
+      }
     }
   }
 
   return (
-    <AuthShell
+    <>
+      {isRedirecting ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-sm">
+          <p className="text-sm font-medium text-muted-foreground">
+            Setting up your workspace...
+          </p>
+        </div>
+      ) : null}
+      <AuthShell
       title="Create account"
       description="Set up your Flowboard account."
       footer={
@@ -690,6 +730,7 @@ export function SignUpForm() {
         ) : null}
       </form>
     </AuthShell>
+    </>
   )
 }
 

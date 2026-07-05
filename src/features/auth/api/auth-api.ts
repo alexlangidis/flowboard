@@ -6,10 +6,56 @@ import type { AuthResponse } from '../types'
 
 export const currentUserQueryKey = ['auth', 'me'] as const
 
+const forceFetchSession = {
+  fetchOptions: { headers: { 'X-Force-Fetch': 'true' } },
+} as const
+
 export async function refreshAuthSession() {
-  return authClient.getSession({
-    query: { disableCookieCache: true },
-  })
+  return authClient.getSession(forceFetchSession)
+}
+
+export async function waitForAuthSession(maxAttempts = 6, delayMs = 100) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const session = await authClient.getSession(forceFetchSession)
+
+    if (session.data?.user) {
+      return session
+    }
+
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+
+  return null
+}
+
+type SignInPayload = {
+  token?: string | null
+  user?: {
+    id: string
+    email: string
+    name: string
+  } | null
+}
+
+export async function completeAuthRedirect(signInPayload?: SignInPayload) {
+  const session = await waitForAuthSession()
+
+  if (!session?.data?.user && signInPayload?.token && signInPayload.user) {
+    try {
+      await apiClient.get<AuthResponse>('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${signInPayload.token}`,
+        },
+        credentials: 'include',
+      })
+    } catch {
+      // The route guard can still fall back to the Neon Auth session user.
+    }
+  }
+
+  window.location.assign('/dashboard')
 }
 
 export async function prefetchCurrentUser(queryClient: QueryClient) {
@@ -21,7 +67,11 @@ export async function prefetchCurrentUser(queryClient: QueryClient) {
 }
 
 export async function getCurrentUser(): Promise<AuthResponse> {
-  const session = await authClient.getSession()
+  let session = await authClient.getSession()
+
+  if (!session.data?.user) {
+    session = await authClient.getSession(forceFetchSession)
+  }
 
   if (!session.data?.user) {
     return { success: true, data: { user: null } }

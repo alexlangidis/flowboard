@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Circle, MessageSquare } from 'lucide-react'
 
+import { redirectAuthenticatedUser } from '@/features/auth/api/route-guards'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/')({
+  beforeLoad: redirectAuthenticatedUser,
   component: HomePage,
 })
 
