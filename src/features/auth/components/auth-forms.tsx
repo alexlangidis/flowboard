@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRight,
   CheckCircle2,
@@ -27,6 +28,9 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  prefetchCurrentUser,
+} from '@/features/auth/api/auth-api'
 import { authClient } from '@/lib/auth-client'
 
 type AuthResult = {
@@ -387,12 +391,18 @@ function VerifyEmailCodeForm({
 
 export function SignInForm() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const canVerifyEmail = shouldOfferVerification(error)
+
+  async function completeSignIn() {
+    await prefetchCurrentUser(queryClient)
+    await navigate({ to: '/dashboard' })
+  }
 
   async function signInWithCredentials(
     nextEmail: string,
@@ -413,7 +423,7 @@ export function SignInForm() {
         return
       }
 
-      await navigate({ to: '/dashboard' })
+      await completeSignIn()
     } catch (error) {
       setError(getCaughtErrorMessage(error, 'Unable to sign in.'))
     } finally {
@@ -433,7 +443,7 @@ export function SignInForm() {
       return
     }
 
-    await navigate({ to: '/dashboard' })
+    await completeSignIn()
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -442,9 +452,10 @@ export function SignInForm() {
   }
 
   async function handleDemoSignIn() {
-    setEmail(demoCredentials.email)
-    setPassword(demoCredentials.password)
-    await signInWithCredentials(demoCredentials.email, demoCredentials.password)
+    await signInWithCredentials(
+      demoCredentials.email,
+      demoCredentials.password,
+    )
   }
 
   return (
@@ -545,6 +556,7 @@ export function SignInForm() {
 
 export function SignUpForm() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -565,6 +577,7 @@ export function SignUpForm() {
       return
     }
 
+    await prefetchCurrentUser(queryClient)
     await navigate({ to: '/dashboard' })
   }
 

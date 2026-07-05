@@ -64,7 +64,13 @@ export function AppLayout({ children }: PropsWithChildren) {
     enabled: isAppRoute,
   })
   const currentUser = currentUserQuery.data?.data.user
-  const showAppHeader = isAppRoute && Boolean(currentUser)
+  const isResolvingAppUser =
+    isAppRoute &&
+    (currentUserQuery.isPending || currentUserQuery.isFetching) &&
+    !currentUserQuery.isError
+  const showAppHeader = isAppRoute && (Boolean(currentUser) || isResolvingAppUser)
+  const useFullWidthAppLayout =
+    isFullWidthApp && (Boolean(currentUser) || isResolvingAppUser)
   const workspacesQuery = useWorkspacesQuery(showAppHeader)
   const workspaces = workspacesQuery.data?.data.workspaces ?? []
   const activeWorkspaceId = useUiStore((state) => state.activeWorkspaceId)
@@ -271,7 +277,7 @@ export function AppLayout({ children }: PropsWithChildren) {
       )}
       <main
         className={
-          isFullWidthApp && showAppHeader
+          useFullWidthAppLayout
             ? 'h-[calc(100svh-3.5rem)] bg-muted/30'
             : 'mx-auto max-w-7xl px-4'
         }

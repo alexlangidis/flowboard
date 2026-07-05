@@ -1,7 +1,24 @@
 import { authClient } from '@/lib/auth-client'
 import { apiClient } from '@/lib/api-client'
+import type { QueryClient } from '@tanstack/react-query'
 
 import type { AuthResponse } from '../types'
+
+export const currentUserQueryKey = ['auth', 'me'] as const
+
+export async function refreshAuthSession() {
+  return authClient.getSession({
+    query: { disableCookieCache: true },
+  })
+}
+
+export async function prefetchCurrentUser(queryClient: QueryClient) {
+  await refreshAuthSession()
+  await queryClient.fetchQuery({
+    queryKey: currentUserQueryKey,
+    queryFn: getCurrentUser,
+  })
+}
 
 export async function getCurrentUser(): Promise<AuthResponse> {
   const session = await authClient.getSession()

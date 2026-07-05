@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import * as authApi from '../api/auth-api'
 
-export const currentUserQueryKey = ['auth', 'me'] as const
+export const currentUserQueryKey = authApi.currentUserQueryKey
 
 export function useLogoutMutation() {
   return useMutation({
